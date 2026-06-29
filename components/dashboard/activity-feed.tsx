@@ -11,7 +11,10 @@ import { cn, timeAgo } from "@/lib/utils";
 
 const kindMeta: Record<ActivityKind, { icon: LucideIcon; tint: string }> = {
   job_started: { icon: PlayCircle, tint: "bg-sky-100 text-sky-700" },
-  job_completed: { icon: CheckCircle2, tint: "bg-emerald-100 text-emerald-700" },
+  job_completed: {
+    icon: CheckCircle2,
+    tint: "bg-emerald-100 text-emerald-700",
+  },
   crew_assigned: { icon: UserPlus, tint: "bg-violet-100 text-violet-700" },
   equipment_moved: { icon: Truck, tint: "bg-amber-100 text-amber-700" },
   report_submitted: { icon: FileText, tint: "bg-slate-100 text-slate-600" },

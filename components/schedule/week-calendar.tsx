@@ -51,10 +51,7 @@ export function WeekCalendar({
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
 
-  const baseMonday = useMemo(
-    () => startOfWeek(parseISO(REFERENCE_DATE)),
-    [],
-  );
+  const baseMonday = useMemo(() => startOfWeek(parseISO(REFERENCE_DATE)), []);
 
   const monday = useMemo(
     () => addDays(baseMonday, weekOffset * 7),
@@ -94,7 +91,10 @@ export function WeekCalendar({
             .filter((job) => {
               if (job.status === "scheduled" && job.progress === 0) {
                 // Scheduled jobs only appear on/after their start date.
-                return date >= parseISO(job.startDate) && date <= parseISO(job.dueDate);
+                return (
+                  date >= parseISO(job.startDate) &&
+                  date <= parseISO(job.dueDate)
+                );
               }
               if (job.status === "on_hold") return false;
               return (

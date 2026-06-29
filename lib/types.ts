@@ -76,11 +76,7 @@ export interface Equipment {
 }
 
 export type CrewRole =
-  | "foreman"
-  | "operator"
-  | "laborer"
-  | "surveyor"
-  | "mechanic";
+  "foreman" | "operator" | "laborer" | "surveyor" | "mechanic";
 
 export type CrewStatus = "on_site" | "available" | "off";
 
