@@ -47,7 +47,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-2">
         {navItems.map((item) => {
           // Overview should only match exactly; sub-routes match by prefix.
           const active =
