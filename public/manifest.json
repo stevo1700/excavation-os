@@ -1,0 +1,17 @@
+{
+  "name": "Excavation OS",
+  "short_name": "ExcavOS",
+  "description": "Management dashboard for excavation contracting",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
