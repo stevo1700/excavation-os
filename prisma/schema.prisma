@@ -1,0 +1,149 @@
+// Excavation OS — database schema.
+//
+// Phase 3 introduces a real Postgres data layer behind the dashboard. The
+// shapes here intentionally mirror the domain the UI already renders (jobs,
+// equipment, crew, reports, notes, activity) so the seed in prisma/seed.ts can
+// load the existing mock data into a real database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  FOREMAN
+  OPERATOR
+  LABOURER
+}
+
+enum JobStatus {
+  QUOTED
+  ACTIVE
+  ON_HOLD
+  COMPLETE
+}
+
+enum EquipmentStatus {
+  IDLE
+  IN_USE
+  MAINTENANCE
+}
+
+enum CrewStatus {
+  ON_SITE
+  AVAILABLE
+  OFF
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  name      String
+  email     String   @unique
+  role      UserRole @default(LABOURER)
+  createdAt DateTime @default(now())
+
+  // Relations
+  foremanJobs  Job[]         @relation("JobForeman")
+  crewMember   CrewMember?
+  dailyReports DailyReport[] @relation("ReportAuthor")
+  notes        Note[]        @relation("NoteAuthor")
+}
+
+model Job {
+  id            String    @id @default(cuid())
+  name          String
+  client        String
+  siteAddress   String
+  status        JobStatus @default(QUOTED)
+  startDate     DateTime?
+  estCompletion DateTime?
+  value         Int       @default(0)
+  description   String?
+  color         String    @default("amber")
+  foremanId     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  foreman      User?         @relation("JobForeman", fields: [foremanId], references: [id])
+  equipment    Equipment[]
+  crew         CrewMember[]
+  dailyReports DailyReport[]
+  notes        Note[]
+  activity     ActivityEvent[]
+}
+
+model Equipment {
+  id             String          @id @default(cuid())
+  name           String
+  category       String
+  make           String?
+  model          String?
+  year           Int?
+  status         EquipmentStatus @default(IDLE)
+  hoursThisMonth Int             @default(0)
+  jobId          String?
+  createdAt      DateTime        @default(now())
+
+  // Relations
+  job Job? @relation(fields: [jobId], references: [id])
+}
+
+model CrewMember {
+  id        String     @id @default(cuid())
+  userId    String?    @unique
+  name      String
+  role      String
+  phone     String?
+  status    CrewStatus @default(AVAILABLE)
+  jobId     String?
+  createdAt DateTime   @default(now())
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id])
+  job  Job?  @relation(fields: [jobId], references: [id])
+}
+
+model DailyReport {
+  id            String   @id @default(cuid())
+  jobId         String
+  submittedById String
+  date          DateTime
+  weather       String?
+  summary       String
+  hoursWorked   Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  // Relations
+  job         Job  @relation(fields: [jobId], references: [id])
+  submittedBy User @relation("ReportAuthor", fields: [submittedById], references: [id])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  jobId     String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  // Relations
+  job    Job  @relation(fields: [jobId], references: [id])
+  author User @relation("NoteAuthor", fields: [authorId], references: [id])
+}
+
+model ActivityEvent {
+  id          String   @id @default(cuid())
+  type        String
+  description String
+  jobId       String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  job Job? @relation(fields: [jobId], references: [id])
+}
