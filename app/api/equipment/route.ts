@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
-import { getEquipment } from "@/lib/actions/equipment";
+import { createEquipmentRecord, getEquipment } from "@/lib/actions/equipment";
+import { readJsonObject } from "@/lib/http";
+import { EQUIPMENT_STATUSES, validateEquipmentInput } from "@/lib/validators";
 import type { EquipmentStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-const EQUIPMENT_STATUSES: EquipmentStatus[] = [
-  "available",
-  "in_use",
-  "maintenance",
-];
 
 /** GET /api/equipment — the fleet, optionally filtered by ?status=. */
 export async function GET(request: Request) {
@@ -28,4 +24,16 @@ export async function GET(request: Request) {
     : equipment;
 
   return NextResponse.json(data);
+}
+
+/** POST /api/equipment — create a machine. Requires `name` and `type`. */
+export async function POST(request: Request) {
+  const parsed = await readJsonObject(request);
+  if (parsed.error) return parsed.error;
+
+  const validated = validateEquipmentInput(parsed.body, "create");
+  if (validated.error) return validated.error;
+
+  const machine = await createEquipmentRecord(validated.input);
+  return NextResponse.json(machine, { status: 201 });
 }

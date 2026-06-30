@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { getJobs } from "@/lib/actions/jobs";
+import { createJobRecord, getJobs } from "@/lib/actions/jobs";
+import { readJsonObject } from "@/lib/http";
+import { JOB_STATUSES, validateJobInput } from "@/lib/validators";
 import type { JobStatus } from "@/lib/types";
 
-// Read live data on every request.
+// Read/write live data on every request.
 export const dynamic = "force-dynamic";
-
-const JOB_STATUSES: JobStatus[] = [
-  "scheduled",
-  "in_progress",
-  "on_hold",
-  "completed",
-];
 
 /** GET /api/jobs — all jobs, optionally filtered by ?status=. */
 export async function GET(request: Request) {
@@ -28,4 +23,16 @@ export async function GET(request: Request) {
   const data = status ? jobs.filter((job) => job.status === status) : jobs;
 
   return NextResponse.json(data);
+}
+
+/** POST /api/jobs — create a job. Requires `name` and `client`. */
+export async function POST(request: Request) {
+  const parsed = await readJsonObject(request);
+  if (parsed.error) return parsed.error;
+
+  const validated = validateJobInput(parsed.body, "create");
+  if (validated.error) return validated.error;
+
+  const job = await createJobRecord(validated.input);
+  return NextResponse.json(job, { status: 201 });
 }
