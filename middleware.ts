@@ -4,7 +4,12 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // visitors are redirected to /sign-in (configured on ClerkProvider).
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
 
+// Public routes that must never require auth — notably the client portal, which
+// is shared with external clients via a random token.
+const isPublicRoute = createRouteMatcher(["/portal(.*)"]);
+
 export default clerkMiddleware(async (auth, req) => {
+  if (isPublicRoute(req)) return;
   if (isProtectedRoute(req)) {
     await auth.protect();
   }

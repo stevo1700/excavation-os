@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  Clock,
+  FileText,
   HardHat,
   LayoutDashboard,
   Menu,
@@ -21,6 +23,8 @@ const navItems = [
   { href: "/dashboard/equipment", label: "Equipment", icon: Truck },
   { href: "/dashboard/crew", label: "Crew", icon: HardHat },
   { href: "/dashboard/schedule", label: "Schedule", icon: CalendarDays },
+  { href: "/dashboard/reports", label: "Reports", icon: FileText },
+  { href: "/dashboard/timesheets", label: "Timesheets", icon: Clock },
 ];
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
