@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { FileText } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar, type FilterOption } from "@/components/ui/filter-bar";
 import { FinanceStatusBadge } from "@/components/finance/status-badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -38,11 +40,15 @@ export function QuotesList({ quotes }: { quotes: QuoteListItem[] }) {
       />
 
       {visible.length === 0 ? (
-        <Card>
-          <div className="py-12 text-center text-sm text-slate-400">
-            No quotes to show.
-          </div>
-        </Card>
+        <EmptyState
+          icon={FileText}
+          title="No quotes to show"
+          description={
+            filter === "all"
+              ? "Create a quote to start pricing work for a customer."
+              : "No quotes match this status filter."
+          }
+        />
       ) : (
         <Card>
           <div className="overflow-x-auto">

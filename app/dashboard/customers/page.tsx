@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Users2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getCustomers } from "@/lib/actions/customers";
 import { formatCurrency } from "@/lib/utils";
 
@@ -27,11 +28,20 @@ export default async function CustomersPage() {
       />
 
       {customers.length === 0 ? (
-        <Card>
-          <CardBody className="py-12 text-center text-sm text-slate-400">
-            No customers yet.
-          </CardBody>
-        </Card>
+        <EmptyState
+          icon={Users2}
+          title="No customers yet"
+          description="Add your first customer to start tracking jobs, quotes, and invoices against them."
+          action={
+            <Link
+              href="/dashboard/customers/new"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
+            >
+              <UserPlus className="h-4 w-4" />
+              New Customer
+            </Link>
+          }
+        />
       ) : (
         <Card>
           <div className="overflow-x-auto">
