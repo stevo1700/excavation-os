@@ -60,10 +60,10 @@ model Job {
   id            String    @id @default(cuid())
   name          String
   client        String
-  siteAddress   String
+  siteAddress   String    @map("address")
   status        JobStatus @default(QUOTED)
   startDate     DateTime?
-  estCompletion DateTime?
+  estCompletion DateTime? @map("endDate")
   value         Int       @default(0) @map("contractValue")
   description   String?
   color         String    @default("amber")
@@ -89,7 +89,7 @@ model Job {
 model Equipment {
   id             String          @id @default(cuid())
   name           String
-  category       String
+  category       String          @map("type")
   make           String?
   model          String?
   year           Int?
@@ -121,10 +121,10 @@ model CrewMember {
 model DailyReport {
   id            String   @id @default(cuid())
   jobId         String
-  submittedById String
+  submittedById String   @map("authorId")
   date          DateTime
   weather       String?
-  summary       String
+  summary       String   @map("workPerformed")
   hoursWorked   Int      @default(0)
   createdAt     DateTime @default(now())
 
@@ -137,7 +137,7 @@ model Note {
   id        String   @id @default(cuid())
   jobId     String
   authorId  String
-  body      String
+  body      String   @map("content")
   createdAt DateTime @default(now())
 
   // Relations
