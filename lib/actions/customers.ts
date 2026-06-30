@@ -2,17 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { JobStatus as PrismaJobStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 
-const jobStatusLabel: Record<PrismaJobStatus, string> = {
-  QUOTED: "Quoted",
-  ACTIVE: "Active",
-  ON_HOLD: "On hold",
-  COMPLETE: "Complete",
-  CANCELLED: "Cancelled",
-};
+function statusLabel(status: string): string {
+  return status
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
 
 export interface CustomerListItem {
   id: string;
@@ -58,7 +56,7 @@ export interface CustomerDetail {
 export async function getCustomers(): Promise<CustomerListItem[]> {
   try {
     const rows = await prisma.customer.findMany({
-      include: { jobs: { select: { value: true } } },
+      include: { jobs: { select: { contractValue: true } } },
       orderBy: { name: "asc" },
     });
     return rows.map((customer) => ({
@@ -68,7 +66,10 @@ export async function getCustomers(): Promise<CustomerListItem[]> {
       email: customer.email,
       phone: customer.phone,
       jobCount: customer.jobs.length,
-      totalValue: customer.jobs.reduce((sum, job) => sum + job.value, 0),
+      totalValue: customer.jobs.reduce(
+        (sum, job) => sum + job.contractValue,
+        0,
+      ),
     }));
   } catch (error) {
     logActionError("getCustomers", error);
@@ -92,8 +93,8 @@ export async function getCustomer(id: string): Promise<CustomerDetail | null> {
     const jobs = customer.jobs.map((job) => ({
       id: job.id,
       name: job.name,
-      status: jobStatusLabel[job.status],
-      value: job.value,
+      status: statusLabel(job.status),
+      value: job.contractValue,
     }));
     const invoices = customer.invoices.map((invoice) => ({
       id: invoice.id,

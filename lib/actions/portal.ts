@@ -1,16 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { JobStatus as PrismaJobStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
-const statusLabel: Record<PrismaJobStatus, string> = {
-  QUOTED: "Quoted",
-  ACTIVE: "Active",
-  ON_HOLD: "On hold",
-  COMPLETE: "Complete",
-  CANCELLED: "Cancelled",
-};
+function statusLabel(status: string): string {
+  return status
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
 
 /**
  * Create a shareable client-portal token for a job and return the raw token.
@@ -83,17 +81,19 @@ export async function getPortalData(token: string): Promise<PortalData | null> {
         id: job.id,
         name: job.name,
         client: job.client,
-        status: statusLabel[job.status],
-        siteAddress: job.siteAddress,
+        status: statusLabel(job.status),
+        siteAddress:
+          [job.address, job.city, job.state].filter(Boolean).join(", ") || "—",
         startDate: isoOrNull(job.startDate),
-        estCompletion: isoOrNull(job.estCompletion),
+        estCompletion: isoOrNull(job.endDate),
       },
       reports: job.dailyReports.map((report) => ({
         id: report.id,
         date: report.date.toISOString().slice(0, 10),
         weather: report.weather,
-        summary: report.summary,
-        crewCount: Math.max(1, Math.round(report.hoursWorked / 8)),
+        summary: report.workPerformed,
+        crewCount:
+          report.crewCount ?? Math.max(1, Math.round(report.hoursWorked / 8)),
       })),
       totalHours,
     };

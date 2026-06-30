@@ -2,23 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { JobStatus as PrismaJobStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 import { jobs as mockJobs } from "@/lib/data";
 import type { Job, JobColor, JobStatus } from "@/lib/types";
 
-const uiStatus: Record<PrismaJobStatus, JobStatus> = {
-  QUOTED: "scheduled",
-  ACTIVE: "in_progress",
-  ON_HOLD: "on_hold",
-  COMPLETE: "completed",
-  // Cancelled jobs are soft-deleted and filtered out of queries; this entry
-  // only exists to keep the mapping exhaustive.
-  CANCELLED: "completed",
-};
+// The DB stores status as a free-text enum whose exact values weren't
+// introspectable; map tolerantly onto the UI's status union.
+function toUiStatus(status: string): JobStatus {
+  const s = status.toLowerCase();
+  if (s.includes("progress") || s === "active") return "in_progress";
+  if (s.includes("hold")) return "on_hold";
+  if (s.includes("complete") || s.includes("done")) return "completed";
+  return "scheduled";
+}
 
-// The schema does not track a progress percentage; approximate it from status.
 const progressForStatus: Record<JobStatus, number> = {
   scheduled: 0,
   in_progress: 50,
@@ -26,13 +24,27 @@ const progressForStatus: Record<JobStatus, number> = {
   completed: 100,
 };
 
-const JOB_STATUSES: PrismaJobStatus[] = [
-  "QUOTED",
-  "ACTIVE",
-  "ON_HOLD",
-  "COMPLETE",
-  "CANCELLED",
+// The DB has no per-job color column, so derive a stable one from the id.
+const JOB_COLORS: JobColor[] = [
+  "amber",
+  "sky",
+  "emerald",
+  "violet",
+  "rose",
+  "cyan",
+  "orange",
+  "indigo",
+  "teal",
+  "fuchsia",
 ];
+
+function colorForId(id: string): JobColor {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return JOB_COLORS[hash % JOB_COLORS.length];
+}
 
 function isoDate(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : "";
@@ -43,33 +55,36 @@ type JobWithRelations = Awaited<ReturnType<typeof loadJobs>>[number];
 function loadJobs() {
   return prisma.job.findMany({
     where: { status: { not: "CANCELLED" } },
-    include: { foreman: true, notes: { include: { author: true } } },
-    orderBy: { id: "asc" },
+    include: { notes: true },
+    orderBy: { createdAt: "desc" },
   });
 }
 
 function toUiJob(job: JobWithRelations): Job {
-  const status = uiStatus[job.status];
+  const status = toUiStatus(job.status);
+  const site =
+    [job.address, job.city, job.state].filter(Boolean).join(", ") || "—";
   return {
     id: job.id,
     name: job.name,
     client: job.client,
-    site: job.siteAddress,
+    site,
     status,
-    foreman: job.foreman?.name ?? "Unassigned",
+    // The DB has no foreman link; the field is kept for the UI but unassigned.
+    foreman: "Unassigned",
     progress: progressForStatus[status],
     startDate: isoDate(job.startDate),
-    dueDate: isoDate(job.estCompletion),
-    value: job.value,
-    color: job.color as JobColor,
+    dueDate: isoDate(job.endDate),
+    value: job.contractValue,
+    color: colorForId(job.id),
     description: job.description ?? "",
-    notes: job.notes
+    notes: [...job.notes]
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .map((note) => ({
         id: note.id,
-        author: note.author.name,
+        author: note.authorName ?? "—",
         date: isoDate(note.createdAt),
-        body: note.body,
+        body: note.content,
       })),
   };
 }
@@ -90,7 +105,7 @@ export async function getJob(id: string): Promise<Job | null> {
   try {
     const job = await prisma.job.findUnique({
       where: { id },
-      include: { foreman: true, notes: { include: { author: true } } },
+      include: { notes: true },
     });
     if (!job || job.status === "CANCELLED") return null;
     return toUiJob(job);
@@ -111,20 +126,15 @@ function parseDate(value: string): Date | null {
 }
 
 function parseJobForm(formData: FormData) {
-  const statusRaw = field(formData, "status");
-  const status = JOB_STATUSES.includes(statusRaw as PrismaJobStatus)
-    ? (statusRaw as PrismaJobStatus)
-    : "QUOTED";
   const value = Number.parseInt(field(formData, "value"), 10);
-
   return {
     name: field(formData, "name"),
     client: field(formData, "client"),
-    siteAddress: field(formData, "siteAddress"),
-    status,
+    address: field(formData, "siteAddress") || null,
+    status: field(formData, "status") || "ACTIVE",
     startDate: parseDate(field(formData, "startDate")),
-    estCompletion: parseDate(field(formData, "estCompletion")),
-    value: Number.isFinite(value) ? value : 0,
+    endDate: parseDate(field(formData, "estCompletion")),
+    contractValue: Number.isFinite(value) ? value : 0,
     description: field(formData, "description") || null,
   };
 }
