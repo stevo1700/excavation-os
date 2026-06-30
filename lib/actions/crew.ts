@@ -1,15 +1,38 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 import { crew as mockCrew } from "@/lib/data";
 import type { CrewMember, CrewRole, CrewStatus } from "@/lib/types";
 
-// The DB has no crew status column — derive one from `active` + assignment.
+// The DB has no crew status column for the roster view — derive one from
+// `active` + assignment.
 function deriveStatus(active: boolean, jobId: string | null): CrewStatus {
   if (!active) return "off";
   return jobId ? "on_site" : "available";
+}
+
+// Shared DB-row → UI mapper.
+function toUiCrew(member: {
+  id: string;
+  name: string;
+  role: string;
+  active: boolean;
+  jobId: string | null;
+  certifications: string[];
+  phone: string | null;
+}): CrewMember {
+  return {
+    id: member.id,
+    name: member.name,
+    role: member.role.toLowerCase() as CrewRole,
+    status: deriveStatus(member.active, member.jobId),
+    assignedJob: member.jobId,
+    certifications: member.certifications,
+    phone: member.phone ?? "",
+  };
 }
 
 /** Input accepted by {@link createCrewMember}. */
@@ -28,16 +51,7 @@ export interface NewCrewMember {
 export async function getCrew(): Promise<CrewMember[]> {
   try {
     const rows = await prisma.crewMember.findMany({ orderBy: { name: "asc" } });
-
-    return rows.map((member) => ({
-      id: member.id,
-      name: member.name,
-      role: member.role.toLowerCase() as CrewRole,
-      status: deriveStatus(member.active, member.jobId),
-      assignedJob: member.jobId,
-      certifications: member.certifications,
-      phone: member.phone ?? "",
-    }));
+    return rows.map(toUiCrew);
   } catch (error) {
     logActionError("getCrew", error);
     return mockCrew;
@@ -60,16 +74,46 @@ export async function createCrewMember(
   });
 
   revalidatePath("/dashboard/crew");
+  return toUiCrew(created);
+}
 
-  return {
-    id: created.id,
-    name: created.name,
-    role: created.role.toLowerCase() as CrewRole,
-    status: deriveStatus(created.active, created.jobId),
-    assignedJob: created.jobId,
-    certifications: created.certifications,
-    phone: created.phone ?? "",
-  };
+// --- JSON write API (used by the REST route handlers) -------------------------
+
+/** Fields accepted when updating a crew member over the JSON API. */
+export interface CrewUpdateInput {
+  name?: string;
+  role?: CrewRole;
+  status?: CrewStatus;
+  phone?: string | null;
+  jobId?: string | null;
+}
+
+/**
+ * Apply a partial update to a crew member, returned in UI shape, or null if no
+ * member with that id exists.
+ */
+export async function updateCrewMember(
+  id: string,
+  input: CrewUpdateInput,
+): Promise<CrewMember | null> {
+  const existing = await prisma.crewMember.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  const data: Prisma.CrewMemberUncheckedUpdateInput = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.role !== undefined) data.role = input.role;
+  if (input.phone !== undefined) data.phone = input.phone;
+  if (input.jobId !== undefined) data.jobId = input.jobId;
+  if (input.status !== undefined) {
+    // Keep both representations in sync: the status board reads the `status`
+    // column, while getCrew derives status from `active` + assignment.
+    data.status = input.status;
+    data.active = input.status !== "off";
+  }
+
+  const member = await prisma.crewMember.update({ where: { id }, data });
+  revalidatePath("/dashboard/crew");
+  return toUiCrew(member);
 }
 
 // --- crew status board --------------------------------------------------------

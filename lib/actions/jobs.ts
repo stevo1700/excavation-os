@@ -217,3 +217,99 @@ export async function updateJobScheduleDate(
   });
   revalidatePath("/dashboard/schedule");
 }
+
+// --- JSON write API (used by the REST route handlers) -------------------------
+
+// UI status union → the DB's free-text status token. `toUiStatus` maps these
+// back, so a value written here round-trips to the same UI status.
+const dbJobStatus: Record<JobStatus, string> = {
+  scheduled: "SCHEDULED",
+  in_progress: "ACTIVE",
+  on_hold: "ON_HOLD",
+  completed: "COMPLETED",
+};
+
+/** Fields accepted when creating or updating a job over the JSON API. */
+export interface JobWriteInput {
+  name?: string;
+  client?: string;
+  status?: JobStatus;
+  /** Contract value in USD. */
+  value?: number;
+  startDate?: string | null;
+  dueDate?: string | null;
+  scheduledDate?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  description?: string | null;
+}
+
+function parseDateInput(value: string | null | undefined): Date | null {
+  return value ? new Date(value) : null;
+}
+
+/** Create a job from a JSON payload and return it in UI shape. */
+export async function createJobRecord(input: JobWriteInput): Promise<Job> {
+  const job = await prisma.job.create({
+    data: {
+      name: input.name ?? "",
+      client: input.client ?? "",
+      status: input.status ? dbJobStatus[input.status] : "ACTIVE",
+      contractValue: input.value ?? 0,
+      startDate: parseDateInput(input.startDate),
+      endDate: parseDateInput(input.dueDate),
+      scheduledDate: parseDateInput(input.scheduledDate),
+      address: input.address ?? null,
+      city: input.city ?? null,
+      state: input.state ?? null,
+      description: input.description ?? null,
+    },
+    include: { notes: true },
+  });
+  revalidatePath("/dashboard/jobs");
+  return toUiJob(job);
+}
+
+/**
+ * Apply a partial update to a job and return it in UI shape, or null if no job
+ * with that id exists.
+ */
+export async function updateJobRecord(
+  id: string,
+  input: JobWriteInput,
+): Promise<Job | null> {
+  const existing = await prisma.job.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  const job = await prisma.job.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.client !== undefined ? { client: input.client } : {}),
+      ...(input.status !== undefined
+        ? { status: dbJobStatus[input.status] }
+        : {}),
+      ...(input.value !== undefined ? { contractValue: input.value } : {}),
+      ...(input.startDate !== undefined
+        ? { startDate: parseDateInput(input.startDate) }
+        : {}),
+      ...(input.dueDate !== undefined
+        ? { endDate: parseDateInput(input.dueDate) }
+        : {}),
+      ...(input.scheduledDate !== undefined
+        ? { scheduledDate: parseDateInput(input.scheduledDate) }
+        : {}),
+      ...(input.address !== undefined ? { address: input.address } : {}),
+      ...(input.city !== undefined ? { city: input.city } : {}),
+      ...(input.state !== undefined ? { state: input.state } : {}),
+      ...(input.description !== undefined
+        ? { description: input.description }
+        : {}),
+    },
+    include: { notes: true },
+  });
+  revalidatePath("/dashboard/jobs");
+  revalidatePath(`/dashboard/jobs/${id}`);
+  return toUiJob(job);
+}
