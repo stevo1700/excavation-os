@@ -3,23 +3,33 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { JobDetailTabs } from "@/components/jobs/job-detail-tabs";
-import { crew, equipment, jobs } from "@/lib/data";
-import { reportsForJob } from "@/lib/mock-reports";
+import { getJob } from "@/lib/actions/jobs";
+import { getCrew } from "@/lib/actions/crew";
+import { getEquipment } from "@/lib/actions/equipment";
+import { getReportsForJob } from "@/lib/actions/reports";
 import { jobColor } from "@/lib/utils";
 
-export function generateStaticParams() {
-  return jobs.map((job) => ({ id: job.id }));
-}
+// Render per-request so the detail reflects live database state.
+export const dynamic = "force-dynamic";
 
-export default function JobDetailPage({ params }: { params: { id: string } }) {
-  const job = jobs.find((item) => item.id === params.id);
+export default async function JobDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const job = await getJob(params.id);
   if (!job) notFound();
+
+  const [crew, equipment, reports] = await Promise.all([
+    getCrew(),
+    getEquipment(),
+    getReportsForJob(job.id),
+  ]);
 
   const jobCrew = crew.filter((member) => member.assignedJob === job.id);
   const jobEquipment = equipment.filter(
     (machine) => machine.assignedJob === job.id,
   );
-  const reports = reportsForJob(job.id);
   const c = jobColor(job.color);
 
   return (

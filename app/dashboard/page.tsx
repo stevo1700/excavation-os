@@ -13,16 +13,64 @@ import {
 import { NewJobModal } from "@/components/dashboard/new-job-modal";
 import { AddEquipmentModal } from "@/components/dashboard/add-equipment-modal";
 import { AddCrewModal } from "@/components/dashboard/add-crew-modal";
-import { activity, equipment, jobs, kpis, weeklyRevenue } from "@/lib/data";
-import { formatCurrency, formatDate, jobColor } from "@/lib/utils";
+import { getJobs } from "@/lib/actions/jobs";
+import { getEquipment } from "@/lib/actions/equipment";
+import { getCrew } from "@/lib/actions/crew";
+import { getActivity } from "@/lib/actions/activity";
+import { weeklyRevenue } from "@/lib/data";
+import type { Kpi } from "@/lib/types";
+import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/utils";
+import { jobColor } from "@/lib/utils";
 
-export default function DashboardOverviewPage() {
+// Render per-request so the overview reflects live database state.
+export const dynamic = "force-dynamic";
+
+export default async function DashboardOverviewPage() {
+  const [jobs, equipment, crew, activity] = await Promise.all([
+    getJobs(),
+    getEquipment(),
+    getCrew(),
+    getActivity(),
+  ]);
+
   const activeJobs = jobs.filter((job) => job.status === "in_progress");
+  const inUse = equipment.filter((e) => e.status === "in_use").length;
+  const onSite = crew.filter((member) => member.status === "on_site").length;
+  const activePipeline = activeJobs.reduce((sum, job) => sum + job.value, 0);
+
+  // KPI values are real counts from the database; the trend percentages are
+  // illustrative (a true trend needs historical snapshots we don't store yet).
+  const kpis: Kpi[] = [
+    {
+      label: "Active jobs",
+      value: String(activeJobs.length),
+      change: 14,
+      hint: "in progress on site",
+    },
+    {
+      label: "Equipment in use",
+      value: `${inUse} of ${equipment.length}`,
+      change: 9,
+      hint: "fleet utilization",
+    },
+    {
+      label: "Crew on site",
+      value: String(onSite),
+      change: 12,
+      hint: `of ${crew.length} total`,
+    },
+    {
+      label: "Active pipeline",
+      value: formatCompactCurrency(activePipeline),
+      change: 6,
+      hint: "in-progress contracts",
+    },
+  ];
 
   const utilization: UtilizationSlice[] = [
     {
       label: "In use",
-      value: equipment.filter((e) => e.status === "in_use").length,
+      value: inUse,
       color: "#f59e0b",
     },
     {
