@@ -17,6 +17,7 @@ import { getJobs } from "@/lib/actions/jobs";
 import { getEquipment } from "@/lib/actions/equipment";
 import { getCrew } from "@/lib/actions/crew";
 import { getActivity } from "@/lib/actions/activity";
+import { getFinancialSummary } from "@/lib/actions/invoices";
 import { weeklyRevenue } from "@/lib/data";
 import type { Kpi } from "@/lib/types";
 import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/utils";
@@ -26,11 +27,12 @@ import { jobColor } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardOverviewPage() {
-  const [jobs, equipment, crew, activity] = await Promise.all([
+  const [jobs, equipment, crew, activity, finance] = await Promise.all([
     getJobs(),
     getEquipment(),
     getCrew(),
     getActivity(),
+    getFinancialSummary(),
   ]);
 
   const activeJobs = jobs.filter((job) => job.status === "in_progress");
@@ -108,6 +110,24 @@ export default async function DashboardOverviewPage() {
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <FinancialCard
+          label="Outstanding"
+          value={formatCompactCurrency(finance.outstanding)}
+          hint="sent + overdue invoices"
+        />
+        <FinancialCard
+          label="Paid this month"
+          value={formatCompactCurrency(finance.paidThisMonth)}
+          hint="payments received"
+        />
+        <FinancialCard
+          label="Active quotes"
+          value={String(finance.activeQuotes)}
+          hint="draft + sent"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -213,6 +233,26 @@ export default async function DashboardOverviewPage() {
           )}
         </CardBody>
       </Card>
+    </div>
+  );
+}
+
+function FinancialCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm font-medium text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+        {value}
+      </p>
+      <p className="mt-1 text-xs text-slate-400">{hint}</p>
     </div>
   );
 }
