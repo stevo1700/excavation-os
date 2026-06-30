@@ -142,3 +142,12 @@ export interface DailyReport {
   /** Hours worked across the crew. */
   hoursWorked: number;
 }
+
+/** A single line on a quote or invoice. */
+export interface LineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  /** quantity × unitPrice — recomputed server-side, never trusted from input. */
+  lineTotal: number;
+}

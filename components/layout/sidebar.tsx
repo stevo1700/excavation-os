@@ -11,7 +11,9 @@ import {
   LayoutDashboard,
   Menu,
   Mountain,
+  Receipt,
   Truck,
+  Users2,
   Wrench,
   X,
 } from "lucide-react";
@@ -25,6 +27,9 @@ const navItems = [
   { href: "/dashboard/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/timesheets", label: "Timesheets", icon: Clock },
+  { href: "/dashboard/customers", label: "Customers", icon: Users2 },
+  { href: "/dashboard/quotes", label: "Quotes", icon: FileText },
+  { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
 ];
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
