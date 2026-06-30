@@ -1,9 +1,20 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { WeekCalendar } from "@/components/schedule/week-calendar";
-import { crew, equipment, jobs } from "@/lib/data";
+import { getJobs } from "@/lib/actions/jobs";
+import { getCrew } from "@/lib/actions/crew";
+import { getEquipment } from "@/lib/actions/equipment";
 import { jobColor } from "@/lib/utils";
 
-export default function SchedulePage() {
+// Render per-request so the schedule reflects live database state.
+export const dynamic = "force-dynamic";
+
+export default async function SchedulePage() {
+  const [jobs, crew, equipment] = await Promise.all([
+    getJobs(),
+    getCrew(),
+    getEquipment(),
+  ]);
+
   const legendJobs = jobs.filter(
     (job) => job.status === "in_progress" || job.status === "scheduled",
   );
