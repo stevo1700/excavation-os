@@ -1,9 +1,10 @@
 // Excavation OS — database schema.
 //
-// Phase 3 introduces a real Postgres data layer behind the dashboard. The
-// shapes here intentionally mirror the domain the UI already renders (jobs,
-// equipment, crew, reports, notes, activity) so the seed in prisma/seed.ts can
-// load the existing mock data into a real database.
+// The Phase 3 models below were reconciled (Phase 6) to match the columns that
+// actually exist in the live Neon database, discovered via an information_schema
+// dump. Enum columns are represented as plain String here because their value
+// sets weren't introspectable from this environment; the server actions map
+// them to the UI's display values. The Phase 4/5 tables already match.
 
 generator client {
   provider = "prisma-client-js"
@@ -14,44 +15,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  ADMIN
-  FOREMAN
-  OPERATOR
-  LABOURER
-}
-
-enum JobStatus {
-  QUOTED
-  ACTIVE
-  ON_HOLD
-  COMPLETE
-  CANCELLED
-}
-
-enum EquipmentStatus {
-  IDLE
-  IN_USE
-  MAINTENANCE
-}
-
-enum CrewStatus {
-  ON_SITE
-  AVAILABLE
-  OFF
-}
-
 model User {
   id        String   @id @default(cuid())
   clerkId   String   @unique
-  name      String
   email     String   @unique
-  role      UserRole @default(LABOURER)
+  name      String
+  role      String   @default("LABOURER")
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  foremanJobs  Job[]         @relation("JobForeman")
-  crewMember   CrewMember?
   dailyReports DailyReport[] @relation("ReportAuthor")
   notes        Note[]        @relation("NoteAuthor")
 }
@@ -60,20 +33,19 @@ model Job {
   id            String    @id @default(cuid())
   name          String
   client        String
-  siteAddress   String    @map("address")
-  status        JobStatus @default(QUOTED)
+  status        String    @default("ACTIVE")
   startDate     DateTime?
-  estCompletion DateTime? @map("endDate")
-  value         Int       @default(0) @map("contractValue")
+  endDate       DateTime?
+  address       String?
+  city          String?
+  state         String?
+  contractValue Float     @default(0)
   description   String?
-  color         String    @default("amber")
-  foremanId     String?
   customerId    String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  foreman          User?               @relation("JobForeman", fields: [foremanId], references: [id])
   customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
   equipment        Equipment[]
   crew             CrewMember[]
@@ -87,33 +59,39 @@ model Job {
 }
 
 model Equipment {
-  id             String          @id @default(cuid())
-  name           String
-  category       String          @map("type")
-  make           String?
-  model          String?
-  year           Int?
-  status         EquipmentStatus @default(IDLE)
-  hoursThisMonth Int             @default(0)
-  jobId          String?
-  createdAt      DateTime        @default(now())
+  id           String    @id @default(cuid())
+  name         String
+  type         String
+  status       String    @default("AVAILABLE")
+  year         Int?
+  make         String?
+  model        String?
+  serialNumber String?
+  jobId        String?
+  lastService  DateTime?
+  nextService  DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Relations
   job Job? @relation(fields: [jobId], references: [id])
 }
 
 model CrewMember {
-  id        String     @id @default(cuid())
-  userId    String?    @unique
-  name      String
-  role      String
-  phone     String?
-  status    CrewStatus @default(AVAILABLE)
-  jobId     String?
-  createdAt DateTime   @default(now())
+  id             String    @id @default(cuid())
+  name           String
+  role           String
+  phone          String?
+  email          String?
+  jobId          String?
+  certifications String[]
+  hireDate       DateTime?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relations
-  user             User?            @relation(fields: [userId], references: [id])
   job              Job?             @relation(fields: [jobId], references: [id])
   timesheetEntries TimesheetEntry[]
 }
@@ -121,35 +99,44 @@ model CrewMember {
 model DailyReport {
   id            String   @id @default(cuid())
   jobId         String
-  submittedById String   @map("authorId")
   date          DateTime
+  status        String?
   weather       String?
-  summary       String   @map("workPerformed")
-  hoursWorked   Int      @default(0)
+  temperature   Int?
+  workPerformed String
+  hoursWorked   Float    @default(0)
+  crewCount     Int?
+  safetyNotes   String?
+  authorId      String
   createdAt     DateTime @default(now())
-
-  // Relations
-  job         Job  @relation(fields: [jobId], references: [id])
-  submittedBy User @relation("ReportAuthor", fields: [submittedById], references: [id])
-}
-
-model Note {
-  id        String   @id @default(cuid())
-  jobId     String
-  authorId  String
-  body      String   @map("content")
-  createdAt DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
   job    Job  @relation(fields: [jobId], references: [id])
-  author User @relation("NoteAuthor", fields: [authorId], references: [id])
+  author User @relation("ReportAuthor", fields: [authorId], references: [id])
+}
+
+model Note {
+  id         String   @id @default(cuid())
+  jobId      String
+  content    String
+  authorId   String?
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  job    Job   @relation(fields: [jobId], references: [id])
+  author User? @relation("NoteAuthor", fields: [authorId], references: [id])
 }
 
 model ActivityEvent {
   id          String   @id @default(cuid())
   type        String
-  description String
   jobId       String?
+  description String
+  metadata    Json?
+  userId      String?
   createdAt   DateTime @default(now())
 
   // Relations
@@ -157,12 +144,7 @@ model ActivityEvent {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 4 — Operations layer
-//
-// These two tables are created directly in Neon via the SQL editor (see
-// prisma/sql/2026-phase4-operations.sql) because the sandbox cannot reach
-// Postgres on TCP 5432. The models below mirror that SQL exactly; the id
-// defaults use gen_random_uuid()::text to match the database-side defaults.
+// Phase 4 — Operations layer (matches the live DB)
 // ---------------------------------------------------------------------------
 
 model TimesheetEntry {
@@ -191,12 +173,7 @@ model ClientPortalToken {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 5 — Financial layer + CRM
-//
-// Created directly in Neon via the SQL editor (see
-// prisma/sql/2026-phase5-financial-crm.sql). Quote/Invoice line items are
-// stored as JSON; monetary amounts use Decimal. Status fields are plain text
-// (DRAFT | SENT | … ) to match the SQL.
+// Phase 5 — Financial layer + CRM (matches the live DB)
 // ---------------------------------------------------------------------------
 
 model Customer {

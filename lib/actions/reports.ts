@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { logActionError } from "@/lib/log-error";
 import { jobs as mockJobs } from "@/lib/data";
 import {
   dailyReports as mockReports,
@@ -20,21 +21,23 @@ function toUiReport(report: {
   id: string;
   jobId: string;
   date: Date;
-  summary: string;
+  workPerformed: string;
   weather: string | null;
+  temperature: number | null;
+  crewCount: number | null;
   hoursWorked: number;
-  submittedBy: { name: string };
+  author: { name: string };
 }): DailyReport {
   return {
     id: report.id,
     jobId: report.jobId,
     date: report.date.toISOString().slice(0, 10),
-    submittedBy: report.submittedBy.name,
-    summary: report.summary,
+    submittedBy: report.author.name,
+    summary: report.workPerformed,
     weather: (report.weather as Weather) ?? "Clear",
-    // Temperature/headcount are not modeled in the schema; derive for display.
-    tempHigh: 80,
-    crewCount: Math.max(1, Math.round(report.hoursWorked / 8)),
+    tempHigh: report.temperature ?? 80,
+    crewCount:
+      report.crewCount ?? Math.max(1, Math.round(report.hoursWorked / 8)),
     hoursWorked: report.hoursWorked,
   };
 }
@@ -47,11 +50,12 @@ export async function getReportsForJob(jobId: string): Promise<DailyReport[]> {
   try {
     const rows = await prisma.dailyReport.findMany({
       where: { jobId },
-      include: { submittedBy: true },
+      include: { author: true },
       orderBy: { date: "desc" },
     });
     return rows.map(toUiReport);
-  } catch {
+  } catch (error) {
+    logActionError("getReportsForJob", error);
     return mockReportsForJob(jobId);
   }
 }
@@ -60,14 +64,15 @@ export async function getReportsForJob(jobId: string): Promise<DailyReport[]> {
 export async function getReports(): Promise<DailyReportListItem[]> {
   try {
     const rows = await prisma.dailyReport.findMany({
-      include: { submittedBy: true, job: true },
+      include: { author: true, job: true },
       orderBy: { date: "desc" },
     });
     return rows.map((report) => ({
       ...toUiReport(report),
       jobName: report.job.name,
     }));
-  } catch {
+  } catch (error) {
+    logActionError("getReports", error);
     const jobName = new Map(mockJobs.map((job) => [job.id, job.name]));
     return [...mockReports]
       .sort((a, b) => (a.date < b.date ? 1 : -1))
@@ -78,11 +83,9 @@ export async function getReports(): Promise<DailyReportListItem[]> {
   }
 }
 
-// --- submitter resolution -----------------------------------------------------
-
 // Attribute a report to the signed-in Clerk user (creating a matching User row
 // on first use), falling back to any existing user when Clerk is unavailable.
-async function resolveSubmitterId(): Promise<string> {
+async function resolveAuthorId(): Promise<string> {
   try {
     const user = await currentUser();
     if (user) {
@@ -119,31 +122,30 @@ function field(formData: FormData, key: string): string {
 /** File a daily report against a job, then redirect to the reports list. */
 export async function createDailyReport(formData: FormData): Promise<void> {
   const jobId = field(formData, "jobId");
-  const workPerformed = field(formData, "summary");
 
-  // The schema stores a single summary; fold the richer form fields into it.
-  const sections = [workPerformed];
+  // Equipment used / issues have no dedicated columns; fold them into the
+  // work-performed narrative.
+  const sections = [field(formData, "summary")];
   const equipmentUsed = field(formData, "equipmentUsed");
   const issues = field(formData, "issues");
-  const safety = field(formData, "safetyNotes");
-  const crewCount = field(formData, "crewCount");
   if (equipmentUsed) sections.push(`Equipment used: ${equipmentUsed}`);
   if (issues) sections.push(`Issues / delays: ${issues}`);
-  if (safety) sections.push(`Safety: ${safety}`);
-  if (crewCount) sections.push(`Crew on site: ${crewCount}`);
 
-  const hours = Number.parseInt(field(formData, "hoursWorked"), 10);
+  const hours = Number.parseFloat(field(formData, "hoursWorked"));
+  const crew = Number.parseInt(field(formData, "crewCount"), 10);
   const dateValue = field(formData, "date");
-  const submittedById = await resolveSubmitterId();
+  const authorId = await resolveAuthorId();
 
   await prisma.dailyReport.create({
     data: {
       jobId,
-      submittedById,
+      authorId,
       date: dateValue ? new Date(dateValue) : new Date(),
       weather: field(formData, "weather") || null,
-      summary: sections.filter(Boolean).join("\n\n"),
+      workPerformed: sections.filter(Boolean).join("\n\n"),
       hoursWorked: Number.isFinite(hours) ? hours : 0,
+      crewCount: Number.isFinite(crew) ? crew : null,
+      safetyNotes: field(formData, "safetyNotes") || null,
     },
   });
 

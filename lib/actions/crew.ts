@@ -1,22 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { CrewStatus as PrismaCrewStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { logActionError } from "@/lib/log-error";
 import { crew as mockCrew } from "@/lib/data";
 import type { CrewMember, CrewRole, CrewStatus } from "@/lib/types";
 
-const uiStatus: Record<PrismaCrewStatus, CrewStatus> = {
-  ON_SITE: "on_site",
-  AVAILABLE: "available",
-  OFF: "off",
-};
-
-const dbStatus: Record<CrewStatus, PrismaCrewStatus> = {
-  on_site: "ON_SITE",
-  available: "AVAILABLE",
-  off: "OFF",
-};
+// The DB has no crew status column — derive one from `active` + assignment.
+function deriveStatus(active: boolean, jobId: string | null): CrewStatus {
+  if (!active) return "off";
+  return jobId ? "on_site" : "available";
+}
 
 /** Input accepted by {@link createCrewMember}. */
 export interface NewCrewMember {
@@ -33,19 +27,19 @@ export interface NewCrewMember {
  */
 export async function getCrew(): Promise<CrewMember[]> {
   try {
-    const rows = await prisma.crewMember.findMany({ orderBy: { id: "asc" } });
+    const rows = await prisma.crewMember.findMany({ orderBy: { name: "asc" } });
 
-    // Certifications are not modeled in the DB yet; surfaced as empty here.
     return rows.map((member) => ({
       id: member.id,
       name: member.name,
-      role: member.role as CrewRole,
-      status: uiStatus[member.status],
+      role: member.role.toLowerCase() as CrewRole,
+      status: deriveStatus(member.active, member.jobId),
       assignedJob: member.jobId,
-      certifications: [],
+      certifications: member.certifications,
       phone: member.phone ?? "",
     }));
-  } catch {
+  } catch (error) {
+    logActionError("getCrew", error);
     return mockCrew;
   }
 }
@@ -54,13 +48,14 @@ export async function getCrew(): Promise<CrewMember[]> {
 export async function createCrewMember(
   data: NewCrewMember,
 ): Promise<CrewMember> {
+  const active = data.status !== "off";
   const created = await prisma.crewMember.create({
     data: {
       name: data.name,
       role: data.role,
       phone: data.phone,
-      status: dbStatus[data.status ?? "available"],
       jobId: data.jobId ?? null,
+      active,
     },
   });
 
@@ -69,10 +64,10 @@ export async function createCrewMember(
   return {
     id: created.id,
     name: created.name,
-    role: created.role as CrewRole,
-    status: uiStatus[created.status],
+    role: created.role.toLowerCase() as CrewRole,
+    status: deriveStatus(created.active, created.jobId),
     assignedJob: created.jobId,
-    certifications: [],
+    certifications: created.certifications,
     phone: created.phone ?? "",
   };
 }
