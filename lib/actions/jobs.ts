@@ -162,3 +162,58 @@ export async function deleteJob(id: string): Promise<void> {
   revalidatePath("/dashboard/jobs");
   redirect("/dashboard/jobs");
 }
+
+// --- schedule board -----------------------------------------------------------
+
+/** A job card for the weekly schedule Kanban. */
+export interface ScheduleJobCard {
+  id: string;
+  /** "unscheduled" or an ISO date (YYYY-MM-DD) matching a day column. */
+  columnId: string;
+  name: string;
+  site: string;
+  status: JobStatus;
+  scheduledDate: string | null;
+  crewCount: number;
+}
+
+/** All non-cancelled jobs shaped for the schedule board. */
+export async function getScheduleBoard(): Promise<ScheduleJobCard[]> {
+  try {
+    const rows = await prisma.job.findMany({
+      where: { status: { not: "CANCELLED" } },
+      include: { _count: { select: { crew: true } } },
+      orderBy: { name: "asc" },
+    });
+    return rows.map((job) => {
+      const scheduledDate = job.scheduledDate
+        ? job.scheduledDate.toISOString().slice(0, 10)
+        : null;
+      return {
+        id: job.id,
+        columnId: scheduledDate ?? "unscheduled",
+        name: job.name,
+        site:
+          [job.address, job.city, job.state].filter(Boolean).join(", ") || "—",
+        status: toUiStatus(job.status),
+        scheduledDate,
+        crewCount: job._count.crew,
+      };
+    });
+  } catch (error) {
+    logActionError("getScheduleBoard", error);
+    return [];
+  }
+}
+
+/** Schedule (or unschedule, when date is null) a job onto a day. */
+export async function updateJobScheduleDate(
+  jobId: string,
+  date: string | null,
+): Promise<void> {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { scheduledDate: date ? new Date(date) : null },
+  });
+  revalidatePath("/dashboard/schedule");
+}

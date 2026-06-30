@@ -71,3 +71,42 @@ export async function createCrewMember(
     phone: created.phone ?? "",
   };
 }
+
+// --- crew status board --------------------------------------------------------
+
+/** A crew card for the status Kanban (columnId === status). */
+export interface CrewCard {
+  id: string;
+  columnId: string;
+  name: string;
+  role: string;
+  phone: string | null;
+  certCount: number;
+}
+
+/** All crew shaped for the status board. Empty list if DB unreachable. */
+export async function getCrewBoard(): Promise<CrewCard[]> {
+  try {
+    const rows = await prisma.crewMember.findMany({ orderBy: { name: "asc" } });
+    return rows.map((member) => ({
+      id: member.id,
+      columnId: member.status,
+      name: member.name,
+      role: member.role,
+      phone: member.phone,
+      certCount: member.certifications.length,
+    }));
+  } catch (error) {
+    logActionError("getCrewBoard", error);
+    return [];
+  }
+}
+
+/** Move a crew member to a new status column. */
+export async function updateCrewStatus(
+  id: string,
+  status: string,
+): Promise<void> {
+  await prisma.crewMember.update({ where: { id }, data: { status } });
+  revalidatePath("/dashboard/crew");
+}
