@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, CalendarDays, MapPin, User } from "lucide-react";
+import { ArrowUpRight, CalendarDays, MapPin, User, Wrench } from "lucide-react";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { FilterBar, type FilterOption } from "@/components/ui/filter-bar";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { Job, JobStatus } from "@/lib/types";
 import { formatCurrency, formatDate, jobColor } from "@/lib/utils";
 
@@ -35,6 +36,24 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
   const visible =
     filter === "all" ? jobs : jobs.filter((job) => job.status === filter);
 
+  if (jobs.length === 0) {
+    return (
+      <EmptyState
+        icon={Wrench}
+        title="No jobs yet"
+        description="Create your first job to start tracking crews, equipment, and reports against it."
+        action={
+          <Link
+            href="/dashboard/jobs/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
+          >
+            Create First Job
+          </Link>
+        }
+      />
+    );
+  }
+
   return (
     <>
       <FilterBar
@@ -43,6 +62,10 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
         onChange={setFilter}
         className="mb-5"
       />
+
+      {visible.length === 0 ? (
+        <EmptyState icon={Wrench} title="No jobs match this filter" />
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((job) => {

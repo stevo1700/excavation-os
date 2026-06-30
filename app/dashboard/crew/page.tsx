@@ -5,6 +5,8 @@ import { getCrew } from "@/lib/actions/crew";
 import { getJobs } from "@/lib/actions/jobs";
 
 // Render per-request so the roster reflects live database state.
+export const metadata = { title: "Crew" };
+
 export const dynamic = "force-dynamic";
 
 export default async function CrewPage() {

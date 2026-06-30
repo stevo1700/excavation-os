@@ -3,6 +3,8 @@ import { QuoteForm } from "@/components/finance/quote-form";
 import { createQuote, getJobOptions } from "@/lib/actions/quotes";
 import { getCustomers } from "@/lib/actions/customers";
 
+export const metadata = { title: "New Quote" };
+
 export const dynamic = "force-dynamic";
 
 export default async function NewQuotePage() {

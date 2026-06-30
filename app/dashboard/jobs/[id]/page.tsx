@@ -12,6 +12,8 @@ import { getTimesheetEntries } from "@/lib/actions/timesheets";
 import { jobColor } from "@/lib/utils";
 
 // Render per-request so the detail reflects live database state.
+export const metadata = { title: "Job Details" };
+
 export const dynamic = "force-dynamic";
 
 export default async function JobDetailPage({

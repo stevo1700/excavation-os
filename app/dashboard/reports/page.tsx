@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { FilePlus2 } from "lucide-react";
+import { FilePlus2, FileText } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardBody } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getReports } from "@/lib/actions/reports";
 import { formatDate } from "@/lib/utils";
+
+export const metadata = { title: "Reports" };
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +30,20 @@ export default async function ReportsPage() {
       />
 
       {reports.length === 0 ? (
-        <Card>
-          <CardBody className="py-12 text-center text-sm text-slate-400">
-            No reports filed yet.
-          </CardBody>
-        </Card>
+        <EmptyState
+          icon={FileText}
+          title="No reports filed yet"
+          description="File a daily report to capture site conditions, crew hours, and progress."
+          action={
+            <Link
+              href="/dashboard/reports/new"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
+            >
+              <FilePlus2 className="h-4 w-4" />
+              File Report
+            </Link>
+          }
+        />
       ) : (
         <div className="space-y-3">
           {reports.map((report) => (

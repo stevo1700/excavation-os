@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Receipt } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar, type FilterOption } from "@/components/ui/filter-bar";
 import { FinanceStatusBadge } from "@/components/finance/status-badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -38,11 +40,15 @@ export function InvoicesList({ invoices }: { invoices: InvoiceListItem[] }) {
       />
 
       {visible.length === 0 ? (
-        <Card>
-          <div className="py-12 text-center text-sm text-slate-400">
-            No invoices to show.
-          </div>
-        </Card>
+        <EmptyState
+          icon={Receipt}
+          title="No invoices to show"
+          description={
+            filter === "all"
+              ? "Create an invoice — or generate one from an accepted quote."
+              : "No invoices match this status filter."
+          }
+        />
       ) : (
         <Card>
           <div className="overflow-x-auto">

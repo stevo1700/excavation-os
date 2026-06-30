@@ -4,6 +4,8 @@ import { createInvoice } from "@/lib/actions/invoices";
 import { getJobOptions, getQuoteOptions } from "@/lib/actions/quotes";
 import { getCustomers } from "@/lib/actions/customers";
 
+export const metadata = { title: "New Invoice" };
+
 export const dynamic = "force-dynamic";
 
 export default async function NewInvoicePage() {

@@ -4,6 +4,8 @@ import { JobForm, type JobFormDefaults } from "@/components/jobs/job-form";
 import { deleteJob, getJob, updateJob } from "@/lib/actions/jobs";
 import type { JobStatus } from "@/lib/types";
 
+export const metadata = { title: "Edit Job" };
+
 export const dynamic = "force-dynamic";
 
 // Map the UI status union back to the Prisma enum value for the status select.

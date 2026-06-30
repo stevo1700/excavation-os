@@ -6,6 +6,8 @@ import { getEquipment } from "@/lib/actions/equipment";
 import { jobColor } from "@/lib/utils";
 
 // Render per-request so the schedule reflects live database state.
+export const metadata = { title: "Schedule" };
+
 export const dynamic = "force-dynamic";
 
 export default async function SchedulePage() {

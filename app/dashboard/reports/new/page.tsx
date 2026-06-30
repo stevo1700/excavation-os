@@ -4,6 +4,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { getJobs } from "@/lib/actions/jobs";
 import { createDailyReport } from "@/lib/actions/reports";
 
+export const metadata = { title: "File Report" };
+
 export const dynamic = "force-dynamic";
 
 const weatherOptions = ["Clear", "Cloudy", "Light rain", "Rain", "Windy"];

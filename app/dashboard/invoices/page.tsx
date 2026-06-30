@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { InvoicesList } from "@/components/finance/invoices-list";
 import { getInvoices } from "@/lib/actions/invoices";
 
+export const metadata = { title: "Invoices" };
+
 export const dynamic = "force-dynamic";
 
 export default async function InvoicesPage() {
