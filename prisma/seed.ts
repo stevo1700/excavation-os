@@ -7,6 +7,7 @@
 import { PrismaClient } from "@prisma/client";
 import { jobs, equipment, crew, activity } from "../lib/data";
 import { dailyReports } from "../lib/mock-reports";
+import { generateQrSvg, qrUrlForTag } from "../lib/qr";
 import type {
   CrewRole,
   CrewStatus as MockCrewStatus,
@@ -118,10 +119,14 @@ async function main() {
   });
   console.log(`  ✓ ${jobs.length} jobs`);
 
-  // Equipment.
-  await prisma.equipment.createMany({
-    data: equipment.map((machine) => {
+  // Equipment. Asset tags come straight from lib/data.ts (the single source
+  // of truth, also used as the API's mock fallback); each machine's QR code
+  // is generated here from its tag's canonical scan URL.
+  const equipmentData = await Promise.all(
+    equipment.map(async (machine) => {
       const { make, model } = makeAndModel(machine.name);
+      const qrUrl = qrUrlForTag(machine.assetTag);
+      const qrSvg = await generateQrSvg(qrUrl);
       return {
         id: machine.id,
         name: machine.name,
@@ -130,9 +135,13 @@ async function main() {
         model,
         status: equipmentStatusMap[machine.status],
         jobId: machine.assignedJob,
+        assetTag: machine.assetTag,
+        qrUrl,
+        qrSvg,
       };
     }),
-  });
+  );
+  await prisma.equipment.createMany({ data: equipmentData });
   console.log(`  ✓ ${equipment.length} equipment`);
 
   // Crew members.
