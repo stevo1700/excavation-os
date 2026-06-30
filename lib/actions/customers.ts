@@ -179,3 +179,56 @@ export async function deleteCustomer(id: string): Promise<void> {
   revalidatePath("/dashboard/customers");
   redirect("/dashboard/customers");
 }
+
+// --- CRM pipeline board -------------------------------------------------------
+
+const OPEN_JOB = (status: string) =>
+  !["COMPLETE", "COMPLETED", "CANCELLED"].includes(status.toUpperCase());
+
+/** A customer card for the pipeline Kanban (columnId === pipeline stage). */
+export interface CustomerCard {
+  id: string;
+  columnId: string;
+  name: string;
+  contactName: string | null;
+  phone: string | null;
+  quoteTotal: number;
+  openJobs: number;
+}
+
+/** All customers shaped for the pipeline board. Empty list if DB unreachable. */
+export async function getCustomerBoard(): Promise<CustomerCard[]> {
+  try {
+    const rows = await prisma.customer.findMany({
+      include: {
+        quotes: { select: { total: true } },
+        jobs: { select: { status: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+    return rows.map((customer) => ({
+      id: customer.id,
+      columnId: customer.stage,
+      name: customer.name,
+      contactName: customer.contactName,
+      phone: customer.phone,
+      quoteTotal: customer.quotes.reduce(
+        (sum, q) => sum + q.total.toNumber(),
+        0,
+      ),
+      openJobs: customer.jobs.filter((job) => OPEN_JOB(job.status)).length,
+    }));
+  } catch (error) {
+    logActionError("getCustomerBoard", error);
+    return [];
+  }
+}
+
+/** Move a customer to a new pipeline stage. */
+export async function updateCustomerStage(
+  id: string,
+  stage: string,
+): Promise<void> {
+  await prisma.customer.update({ where: { id }, data: { stage } });
+  revalidatePath("/dashboard/customers");
+}
