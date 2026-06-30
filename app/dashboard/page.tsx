@@ -24,6 +24,8 @@ import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/utils";
 import { jobColor } from "@/lib/utils";
 
 // Render per-request so the overview reflects live database state.
+export const metadata = { title: "Overview" };
+
 export const dynamic = "force-dynamic";
 
 export default async function DashboardOverviewPage() {

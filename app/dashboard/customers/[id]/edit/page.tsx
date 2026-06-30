@@ -7,6 +7,8 @@ import {
   updateCustomer,
 } from "@/lib/actions/customers";
 
+export const metadata = { title: "Edit Customer" };
+
 export const dynamic = "force-dynamic";
 
 export default async function EditCustomerPage({

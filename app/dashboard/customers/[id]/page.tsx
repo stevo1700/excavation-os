@@ -7,6 +7,8 @@ import { CustomerTabs } from "@/components/customers/customer-tabs";
 import { getCustomer } from "@/lib/actions/customers";
 import { formatCurrency } from "@/lib/utils";
 
+export const metadata = { title: "Customer Details" };
+
 export const dynamic = "force-dynamic";
 
 export default async function CustomerDetailPage({

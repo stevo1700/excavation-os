@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { QuotesList } from "@/components/finance/quotes-list";
 import { getQuotes } from "@/lib/actions/quotes";
 
+export const metadata = { title: "Quotes" };
+
 export const dynamic = "force-dynamic";
 
 export default async function QuotesPage() {

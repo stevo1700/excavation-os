@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getCustomers } from "@/lib/actions/customers";
 import { formatCurrency } from "@/lib/utils";
 
+export const metadata = { title: "Customers" };
+
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {

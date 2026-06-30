@@ -5,6 +5,8 @@ import { getEquipment } from "@/lib/actions/equipment";
 import { getJobs } from "@/lib/actions/jobs";
 
 // Render per-request so the fleet reflects live database state.
+export const metadata = { title: "Equipment" };
+
 export const dynamic = "force-dynamic";
 
 export default async function EquipmentPage() {

@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { JobForm } from "@/components/jobs/job-form";
 import { createJob } from "@/lib/actions/jobs";
 
+export const metadata = { title: "New Job" };
+
 export const dynamic = "force-dynamic";
 
 export default function NewJobPage() {

@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getTimesheetEntries } from "@/lib/actions/timesheets";
 import { formatDate } from "@/lib/utils";
 
+export const metadata = { title: "Timesheets" };
+
 export const dynamic = "force-dynamic";
 
 export default async function TimesheetsPage() {

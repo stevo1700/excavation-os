@@ -8,6 +8,8 @@ import { getQuote, updateQuoteStatus } from "@/lib/actions/quotes";
 import { createInvoiceFromQuote } from "@/lib/actions/invoices";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
+export const metadata = { title: "Quote Details" };
+
 export const dynamic = "force-dynamic";
 
 export default async function QuoteDetailPage({

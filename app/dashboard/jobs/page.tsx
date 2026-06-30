@@ -4,6 +4,8 @@ import { JobsList } from "@/components/dashboard/jobs-list";
 import { getJobs } from "@/lib/actions/jobs";
 
 // Render per-request so the list reflects live database state.
+export const metadata = { title: "Jobs" };
+
 export const dynamic = "force-dynamic";
 
 export default async function JobsPage() {

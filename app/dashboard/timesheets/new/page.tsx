@@ -5,6 +5,8 @@ import { getJobs } from "@/lib/actions/jobs";
 import { getCrew } from "@/lib/actions/crew";
 import { createTimesheetEntry } from "@/lib/actions/timesheets";
 
+export const metadata = { title: "Log Hours" };
+
 export const dynamic = "force-dynamic";
 
 export default async function NewTimesheetPage({

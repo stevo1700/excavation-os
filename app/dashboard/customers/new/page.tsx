@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CustomerForm } from "@/components/customers/customer-form";
 import { createCustomer } from "@/lib/actions/customers";
 
+export const metadata = { title: "New Customer" };
+
 export const dynamic = "force-dynamic";
 
 export default function NewCustomerPage() {

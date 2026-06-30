@@ -11,6 +11,8 @@ import {
 } from "@/lib/actions/invoices";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
+export const metadata = { title: "Invoice Details" };
+
 export const dynamic = "force-dynamic";
 
 export default async function InvoiceDetailPage({

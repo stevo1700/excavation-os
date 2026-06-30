@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getReports } from "@/lib/actions/reports";
 import { formatDate } from "@/lib/utils";
 
+export const metadata = { title: "Reports" };
+
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
