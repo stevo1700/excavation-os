@@ -72,6 +72,15 @@ model Equipment {
   lastService  DateTime?
   nextService  DateTime?
   notes        String?
+  // Short human-readable tag, e.g. "EX-310" (2-letter type prefix + 3-digit
+  // number). Doubles as the QR code's scan target via /e/<assetTag>.
+  assetTag     String    @unique
+  // Canonical scan URL: NEXT_PUBLIC_APP_URL + /e/<assetTag>, or a relative
+  // path if that env var isn't set.
+  qrUrl        String
+  // Generated SVG markup for the QR code, regenerated whenever assetTag
+  // changes. Nullable so existing rows can be backfilled lazily.
+  qrSvg        String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
