@@ -68,11 +68,13 @@ model Job {
   description   String?
   color         String    @default("amber")
   foremanId     String?
+  customerId    String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // Relations
   foreman          User?               @relation("JobForeman", fields: [foremanId], references: [id])
+  customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
   equipment        Equipment[]
   crew             CrewMember[]
   dailyReports     DailyReport[]
@@ -80,6 +82,8 @@ model Job {
   activity         ActivityEvent[]
   timesheetEntries TimesheetEntry[]
   portalTokens     ClientPortalToken[]
+  quotes           Quote[]
+  invoices         Invoice[]
 }
 
 model Equipment {
@@ -184,4 +188,74 @@ model ClientPortalToken {
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([token])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Financial layer + CRM
+//
+// Created directly in Neon via the SQL editor (see
+// prisma/sql/2026-phase5-financial-crm.sql). Quote/Invoice line items are
+// stored as JSON; monetary amounts use Decimal. Status fields are plain text
+// (DRAFT | SENT | … ) to match the SQL.
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs     Job[]
+  quotes   Quote[]
+  invoices Invoice[]
+}
+
+model Quote {
+  id          String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  jobId       String
+  customerId  String?
+  quoteNumber String    @unique
+  status      String    @default("DRAFT")
+  lineItems   Json      @default("[]")
+  subtotal    Decimal   @default(0) @db.Decimal(12, 2)
+  taxRate     Decimal   @default(0) @db.Decimal(5, 4)
+  taxAmount   Decimal   @default(0) @db.Decimal(12, 2)
+  total       Decimal   @default(0) @db.Decimal(12, 2)
+  notes       String?
+  validUntil  DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  job      Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoices Invoice[]
+}
+
+model Invoice {
+  id            String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  jobId         String
+  customerId    String?
+  quoteId       String?
+  invoiceNumber String    @unique
+  status        String    @default("DRAFT")
+  lineItems     Json      @default("[]")
+  subtotal      Decimal   @default(0) @db.Decimal(12, 2)
+  taxRate       Decimal   @default(0) @db.Decimal(5, 4)
+  taxAmount     Decimal   @default(0) @db.Decimal(12, 2)
+  total         Decimal   @default(0) @db.Decimal(12, 2)
+  amountPaid    Decimal   @default(0) @db.Decimal(12, 2)
+  dueDate       DateTime? @db.Date
+  paidAt        DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  job      Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  quote    Quote?    @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 }
