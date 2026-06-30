@@ -1,16 +1,10 @@
 // Seeds the database with the same demo data the UI ships with (lib/data.ts and
-// lib/mock-reports.ts), mapped onto the Prisma schema. Running `prisma db seed`
-// gives a real database whose contents match exactly what the dashboard shows.
+// lib/mock-reports.ts), mapped onto the (reconciled) Prisma schema. The live DB
+// is already populated, so this is primarily a reference / local-bootstrap tool.
 //
 // Re-running is safe: the script clears the relevant tables first.
 
-import {
-  PrismaClient,
-  UserRole,
-  JobStatus,
-  EquipmentStatus,
-  CrewStatus,
-} from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { jobs, equipment, crew, activity } from "../lib/data";
 import { dailyReports } from "../lib/mock-reports";
 import type {
@@ -22,33 +16,27 @@ import type {
 
 const prisma = new PrismaClient();
 
-// --- enum mappings: UI string unions -> Prisma enums --------------------------
+// --- mappings: UI string unions -> DB text values -----------------------------
 
-const jobStatusMap: Record<MockJobStatus, JobStatus> = {
-  scheduled: JobStatus.QUOTED,
-  in_progress: JobStatus.ACTIVE,
-  on_hold: JobStatus.ON_HOLD,
-  completed: JobStatus.COMPLETE,
+const jobStatusMap: Record<MockJobStatus, string> = {
+  scheduled: "PENDING",
+  in_progress: "ACTIVE",
+  on_hold: "ON_HOLD",
+  completed: "COMPLETE",
 };
 
-const equipmentStatusMap: Record<MockEquipmentStatus, EquipmentStatus> = {
-  available: EquipmentStatus.IDLE,
-  in_use: EquipmentStatus.IN_USE,
-  maintenance: EquipmentStatus.MAINTENANCE,
+const equipmentStatusMap: Record<MockEquipmentStatus, string> = {
+  available: "AVAILABLE",
+  in_use: "IN_USE",
+  maintenance: "MAINTENANCE",
 };
 
-const crewStatusMap: Record<MockCrewStatus, CrewStatus> = {
-  on_site: CrewStatus.ON_SITE,
-  available: CrewStatus.AVAILABLE,
-  off: CrewStatus.OFF,
-};
-
-const crewRoleToUserRole: Record<CrewRole, UserRole> = {
-  foreman: UserRole.FOREMAN,
-  operator: UserRole.OPERATOR,
-  laborer: UserRole.LABOURER,
-  surveyor: UserRole.OPERATOR,
-  mechanic: UserRole.OPERATOR,
+const crewRoleToUserRole: Record<CrewRole, string> = {
+  foreman: "FOREMAN",
+  operator: "OPERATOR",
+  laborer: "LABOURER",
+  surveyor: "OPERATOR",
+  mechanic: "OPERATOR",
 };
 
 // --- helpers ------------------------------------------------------------------
@@ -65,17 +53,8 @@ function emailForName(name: string): string {
   return `${slug}@excavationos.test`;
 }
 
-// Estimated monthly engine hours, derived from current status (the mock data
-// only tracks lifetime hours, so this is a reasonable stand-in).
-function monthlyHours(status: MockEquipmentStatus): number {
-  switch (status) {
-    case "in_use":
-      return 160;
-    case "maintenance":
-      return 20;
-    default:
-      return 55;
-  }
+function isActive(status: MockCrewStatus): boolean {
+  return status !== "off";
 }
 
 // Split a machine name like "CAT 320 Excavator" into make + model.
@@ -96,8 +75,7 @@ async function main() {
   await prisma.job.deleteMany();
   await prisma.user.deleteMany();
 
-  // Map a person's display name to their User id, so jobs/notes/reports can be
-  // linked by the names used throughout the mock data.
+  // Map a person's display name to their User id and name.
   const userIdByName = new Map<string, string>();
   for (const member of crew) {
     userIdByName.set(member.name, userIdForCrew(member.id));
@@ -111,7 +89,7 @@ async function main() {
         clerkId: "seed_admin",
         name: "Site Admin",
         email: "admin@excavationos.test",
-        role: UserRole.ADMIN,
+        role: "ADMIN",
       },
       ...crew.map((member) => ({
         id: userIdForCrew(member.id),
@@ -130,14 +108,12 @@ async function main() {
       id: job.id,
       name: job.name,
       client: job.client,
-      siteAddress: job.site,
+      address: job.site,
       status: jobStatusMap[job.status],
       startDate: new Date(job.startDate),
-      estCompletion: new Date(job.dueDate),
-      value: job.value,
+      endDate: new Date(job.dueDate),
+      contractValue: job.value,
       description: job.description,
-      color: job.color,
-      foremanId: userIdByName.get(job.foreman) ?? null,
     })),
   });
   console.log(`  ✓ ${jobs.length} jobs`);
@@ -149,26 +125,25 @@ async function main() {
       return {
         id: machine.id,
         name: machine.name,
-        category: machine.category,
+        type: machine.category,
         make,
         model,
         status: equipmentStatusMap[machine.status],
-        hoursThisMonth: monthlyHours(machine.status),
         jobId: machine.assignedJob,
       };
     }),
   });
   console.log(`  ✓ ${equipment.length} equipment`);
 
-  // Crew members (linked to their User account).
+  // Crew members.
   await prisma.crewMember.createMany({
     data: crew.map((member) => ({
       id: member.id,
-      userId: userIdForCrew(member.id),
       name: member.name,
       role: member.role,
       phone: member.phone,
-      status: crewStatusMap[member.status],
+      certifications: member.certifications,
+      active: isActive(member.status),
       jobId: member.assignedJob,
     })),
   });
@@ -179,11 +154,12 @@ async function main() {
     data: dailyReports.map((report) => ({
       id: report.id,
       jobId: report.jobId,
-      submittedById: userIdByName.get(report.submittedBy) ?? "usr_admin",
+      authorId: userIdByName.get(report.submittedBy) ?? "usr_admin",
       date: new Date(report.date),
       weather: report.weather,
-      summary: report.summary,
+      workPerformed: report.summary,
       hoursWorked: report.hoursWorked,
+      crewCount: report.crewCount,
     })),
   });
   console.log(`  ✓ ${dailyReports.length} daily reports`);
@@ -194,7 +170,8 @@ async function main() {
       id: note.id,
       jobId: job.id,
       authorId: userIdByName.get(note.author) ?? "usr_admin",
-      body: note.body,
+      authorName: note.author,
+      content: note.body,
       createdAt: new Date(note.date),
     })),
   );

@@ -46,9 +46,6 @@ export function EquipmentList({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visible.map((machine) => {
-          // Flag machines that are within 100 hours of their next service.
-          const serviceDue = machine.nextServiceHours - machine.hoursLogged;
-          const serviceSoon = serviceDue <= 100;
           const assignment = machine.assignedJob
             ? (jobNames[machine.assignedJob] ?? machine.assignedJob)
             : null;
@@ -80,26 +77,6 @@ export function EquipmentList({
                     <dt className="text-slate-500">Assignment</dt>
                     <dd className="truncate text-right text-slate-700">
                       {assignment ?? "—"}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-slate-500">Hours logged</dt>
-                    <dd className="tabular-nums text-slate-700">
-                      {machine.hoursLogged.toLocaleString()}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-slate-500">Next service</dt>
-                    <dd
-                      className={
-                        serviceSoon
-                          ? "font-medium text-rose-600"
-                          : "tabular-nums text-slate-700"
-                      }
-                    >
-                      {serviceDue <= 0
-                        ? "Overdue"
-                        : `in ${serviceDue.toLocaleString()} hrs`}
                     </dd>
                   </div>
                 </dl>
