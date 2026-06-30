@@ -64,7 +64,7 @@ model Job {
   status        JobStatus @default(QUOTED)
   startDate     DateTime?
   estCompletion DateTime?
-  value         Int       @default(0)
+  value         Int       @default(0) @map("contractValue")
   description   String?
   color         String    @default("amber")
   foremanId     String?
