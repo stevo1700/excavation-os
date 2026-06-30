@@ -26,6 +26,7 @@ enum JobStatus {
   ACTIVE
   ON_HOLD
   COMPLETE
+  CANCELLED
 }
 
 enum EquipmentStatus {
@@ -71,12 +72,14 @@ model Job {
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  foreman      User?         @relation("JobForeman", fields: [foremanId], references: [id])
-  equipment    Equipment[]
-  crew         CrewMember[]
-  dailyReports DailyReport[]
-  notes        Note[]
-  activity     ActivityEvent[]
+  foreman          User?               @relation("JobForeman", fields: [foremanId], references: [id])
+  equipment        Equipment[]
+  crew             CrewMember[]
+  dailyReports     DailyReport[]
+  notes            Note[]
+  activity         ActivityEvent[]
+  timesheetEntries TimesheetEntry[]
+  portalTokens     ClientPortalToken[]
 }
 
 model Equipment {
@@ -106,8 +109,9 @@ model CrewMember {
   createdAt DateTime   @default(now())
 
   // Relations
-  user User? @relation(fields: [userId], references: [id])
-  job  Job?  @relation(fields: [jobId], references: [id])
+  user             User?            @relation(fields: [userId], references: [id])
+  job              Job?             @relation(fields: [jobId], references: [id])
+  timesheetEntries TimesheetEntry[]
 }
 
 model DailyReport {
@@ -146,4 +150,38 @@ model ActivityEvent {
 
   // Relations
   job Job? @relation(fields: [jobId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Operations layer
+//
+// These two tables are created directly in Neon via the SQL editor (see
+// prisma/sql/2026-phase4-operations.sql) because the sandbox cannot reach
+// Postgres on TCP 5432. The models below mirror that SQL exactly; the id
+// defaults use gen_random_uuid()::text to match the database-side defaults.
+// ---------------------------------------------------------------------------
+
+model TimesheetEntry {
+  id           String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  crewMemberId String
+  jobId        String
+  date         DateTime @db.Date
+  hoursWorked  Decimal  @db.Decimal(5, 2)
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  crewMember CrewMember @relation(fields: [crewMemberId], references: [id], onDelete: Cascade)
+  job        Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model ClientPortalToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  jobId     String
+  token     String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([token])
 }

@@ -12,15 +12,18 @@ import type {
   Job,
   Weather,
 } from "@/lib/types";
+import type { TimesheetEntryView } from "@/lib/actions/timesheets";
 import { cn, formatCurrency, formatDate, humanize } from "@/lib/utils";
 
-type TabKey = "overview" | "equipment" | "crew" | "reports" | "notes";
+type TabKey =
+  "overview" | "equipment" | "crew" | "reports" | "timesheets" | "notes";
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "equipment", label: "Equipment" },
   { key: "crew", label: "Crew" },
   { key: "reports", label: "Daily Reports" },
+  { key: "timesheets", label: "Timesheets" },
   { key: "notes", label: "Notes" },
 ];
 
@@ -37,11 +40,13 @@ export function JobDetailTabs({
   crew,
   equipment,
   reports,
+  timesheets,
 }: {
   job: Job;
   crew: CrewMember[];
   equipment: Equipment[];
   reports: DailyReport[];
+  timesheets: TimesheetEntryView[];
 }) {
   const [active, setActive] = useState<TabKey>("overview");
 
@@ -57,9 +62,11 @@ export function JobDetailTabs({
                 ? crew.length
                 : tab.key === "reports"
                   ? reports.length
-                  : tab.key === "notes"
-                    ? job.notes.length
-                    : undefined;
+                  : tab.key === "timesheets"
+                    ? timesheets.length
+                    : tab.key === "notes"
+                      ? job.notes.length
+                      : undefined;
           return (
             <button
               key={tab.key}
@@ -212,6 +219,31 @@ export function JobDetailTabs({
                 </Card>
               );
             })}
+          </div>
+        </EmptyOr>
+      ) : null}
+
+      {active === "timesheets" ? (
+        <EmptyOr count={timesheets.length} noun="hours logged">
+          <div className="space-y-2">
+            {timesheets.map((entry) => (
+              <Card key={entry.id}>
+                <CardBody className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900">
+                      {entry.crewMemberName}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatDate(entry.date)}
+                      {entry.notes ? ` · ${entry.notes}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-slate-900">
+                    {entry.hoursWorked} hrs
+                  </span>
+                </CardBody>
+              </Card>
+            ))}
           </div>
         </EmptyOr>
       ) : null}
