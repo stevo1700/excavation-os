@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FilePlus2, Pencil } from "lucide-react";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { JobDetailTabs } from "@/components/jobs/job-detail-tabs";
+import { PortalShare } from "@/components/jobs/portal-share";
 import { getJob } from "@/lib/actions/jobs";
 import { getCrew } from "@/lib/actions/crew";
 import { getEquipment } from "@/lib/actions/equipment";
 import { getReportsForJob } from "@/lib/actions/reports";
+import { getTimesheetEntries } from "@/lib/actions/timesheets";
 import { jobColor } from "@/lib/utils";
 
 // Render per-request so the detail reflects live database state.
@@ -20,10 +22,11 @@ export default async function JobDetailPage({
   const job = await getJob(params.id);
   if (!job) notFound();
 
-  const [crew, equipment, reports] = await Promise.all([
+  const [crew, equipment, reports, timesheets] = await Promise.all([
     getCrew(),
     getEquipment(),
     getReportsForJob(job.id),
+    getTimesheetEntries({ jobId: job.id }),
   ]);
 
   const jobCrew = crew.filter((member) => member.assignedJob === job.id);
@@ -57,6 +60,27 @@ export default async function JobDetailPage({
             </p>
           </div>
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/dashboard/reports/new?jobId=${job.id}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            <FilePlus2 className="h-4 w-4" />
+            File Daily Report
+          </Link>
+          <Link
+            href={`/dashboard/jobs/${job.id}/edit`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit Job
+          </Link>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <PortalShare jobId={job.id} />
       </div>
 
       <JobDetailTabs
@@ -64,6 +88,7 @@ export default async function JobDetailPage({
         crew={jobCrew}
         equipment={jobEquipment}
         reports={reports}
+        timesheets={timesheets}
       />
     </div>
   );
