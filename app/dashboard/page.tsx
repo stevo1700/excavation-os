@@ -15,7 +15,7 @@ import { AddEquipmentModal } from "@/components/dashboard/add-equipment-modal";
 import { AddCrewModal } from "@/components/dashboard/add-crew-modal";
 import { getJobs } from "@/lib/actions/jobs";
 import { getEquipment } from "@/lib/actions/equipment";
-import { getCrew } from "@/lib/actions/crew";
+import { getKpiSummary } from "@/lib/actions/kpis";
 import { getActivity } from "@/lib/actions/activity";
 import { getFinancialSummary } from "@/lib/actions/invoices";
 import { weeklyRevenue } from "@/lib/data";
@@ -29,45 +29,46 @@ export const metadata = { title: "Overview" };
 export const dynamic = "force-dynamic";
 
 export default async function DashboardOverviewPage() {
-  const [jobs, equipment, crew, activity, finance] = await Promise.all([
+  const [kpiSummary, jobs, equipment, activity, finance] = await Promise.all([
+    getKpiSummary(),
     getJobs(),
     getEquipment(),
-    getCrew(),
     getActivity(),
     getFinancialSummary(),
   ]);
 
   const activeJobs = jobs.filter((job) => job.status === "in_progress");
   const inUse = equipment.filter((e) => e.status === "in_use").length;
-  const onSite = crew.filter((member) => member.status === "on_site").length;
-  const activePipeline = activeJobs.reduce((sum, job) => sum + job.value, 0);
 
-  // KPI values are real counts from the database; the trend percentages are
+  // KPI cards are sourced from the shared getKpiSummary() helper — the same
+  // data the GET /api/kpis endpoint returns — rather than computed inline, so
+  // the dashboard and the API can never drift. The trend percentages are still
   // illustrative (a true trend needs historical snapshots we don't store yet).
+  const { equipmentUtilization } = kpiSummary;
   const kpis: Kpi[] = [
     {
       label: "Active jobs",
-      value: String(activeJobs.length),
+      value: String(kpiSummary.activeJobs),
       change: 14,
       hint: "in progress on site",
     },
     {
       label: "Equipment in use",
-      value: `${inUse} of ${equipment.length}`,
+      value: `${equipmentUtilization.inUse} of ${equipmentUtilization.total}`,
       change: 9,
-      hint: "fleet utilization",
+      hint: `${equipmentUtilization.percent}% fleet utilization`,
     },
     {
       label: "Crew on site",
-      value: String(onSite),
+      value: String(kpiSummary.crewOnSiteToday),
       change: 12,
-      hint: `of ${crew.length} total`,
+      hint: "on site today",
     },
     {
-      label: "Active pipeline",
-      value: formatCompactCurrency(activePipeline),
+      label: "Revenue YTD",
+      value: formatCompactCurrency(kpiSummary.revenueYtd),
       change: 6,
-      hint: "in-progress contracts",
+      hint: "payments received this year",
     },
   ];
 
