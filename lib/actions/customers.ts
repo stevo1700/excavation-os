@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { JobStatus as PrismaJobStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { logActionError } from "@/lib/log-error";
 
 const jobStatusLabel: Record<PrismaJobStatus, string> = {
   QUOTED: "Quoted",
@@ -69,7 +70,8 @@ export async function getCustomers(): Promise<CustomerListItem[]> {
       jobCount: customer.jobs.length,
       totalValue: customer.jobs.reduce((sum, job) => sum + job.value, 0),
     }));
-  } catch {
+  } catch (error) {
+    logActionError("getCustomers", error);
     return [];
   }
 }
@@ -124,7 +126,8 @@ export async function getCustomer(id: string): Promise<CustomerDetail | null> {
         totalPaid: invoices.reduce((sum, inv) => sum + inv.amountPaid, 0),
       },
     };
-  } catch {
+  } catch (error) {
+    logActionError("getCustomer", error);
     return null;
   }
 }

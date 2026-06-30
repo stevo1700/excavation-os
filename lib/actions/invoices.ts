@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { logActionError } from "@/lib/log-error";
 import { computeTotals, parseLineItems } from "@/lib/finance";
 import type { LineItem } from "@/lib/types";
 
@@ -79,7 +80,8 @@ export async function getInvoices(
       amountPaid: invoice.amountPaid.toNumber(),
       dueDate: isoDate(invoice.dueDate),
     }));
-  } catch {
+  } catch (error) {
+    logActionError("getInvoices", error);
     return [];
   }
 }
@@ -235,7 +237,8 @@ export async function getFinancialSummary(): Promise<FinancialSummary> {
       paidThisMonth: paid._sum.amountPaid?.toNumber() ?? 0,
       activeQuotes,
     };
-  } catch {
+  } catch (error) {
+    logActionError("getFinancialSummary", error);
     return { outstanding: 0, paidThisMonth: 0, activeQuotes: 0 };
   }
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { logActionError } from "@/lib/log-error";
 import { computeTotals, parseLineItems } from "@/lib/finance";
 import type { LineItem } from "@/lib/types";
 
@@ -81,7 +82,8 @@ export async function getQuotes(
       validUntil: isoDate(quote.validUntil),
       createdAt: quote.createdAt.toISOString().slice(0, 10),
     }));
-  } catch {
+  } catch (error) {
+    logActionError("getQuotes", error);
     return [];
   }
 }

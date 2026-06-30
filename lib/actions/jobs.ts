@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { JobStatus as PrismaJobStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { logActionError } from "@/lib/log-error";
 import { jobs as mockJobs } from "@/lib/data";
 import type { Job, JobColor, JobStatus } from "@/lib/types";
 
@@ -78,7 +79,8 @@ export async function getJobs(): Promise<Job[]> {
   try {
     const rows = await loadJobs();
     return rows.map(toUiJob);
-  } catch {
+  } catch (error) {
+    logActionError("getJobs", error);
     return mockJobs;
   }
 }
@@ -92,7 +94,8 @@ export async function getJob(id: string): Promise<Job | null> {
     });
     if (!job || job.status === "CANCELLED") return null;
     return toUiJob(job);
-  } catch {
+  } catch (error) {
+    logActionError("getJob", error);
     return mockJobs.find((job) => job.id === id) ?? null;
   }
 }
