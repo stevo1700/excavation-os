@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { updateEquipmentRecord } from "@/lib/actions/equipment";
-import { readJsonObject } from "@/lib/http";
+import { isUniqueConstraintError, readJsonObject } from "@/lib/http";
 import { validateEquipmentInput } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +19,22 @@ export async function PATCH(
   const validated = validateEquipmentInput(parsed.body, "update");
   if (validated.error) return validated.error;
 
-  const machine = await updateEquipmentRecord(params.id, validated.input);
-  if (!machine) {
-    return NextResponse.json({ error: "Equipment not found" }, { status: 404 });
+  try {
+    const machine = await updateEquipmentRecord(params.id, validated.input);
+    if (!machine) {
+      return NextResponse.json(
+        { error: "Equipment not found" },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(machine);
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { error: "`assetTag` is already in use." },
+        { status: 400 },
+      );
+    }
+    throw error;
   }
-
-  return NextResponse.json(machine);
 }

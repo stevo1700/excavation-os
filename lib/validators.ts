@@ -10,6 +10,7 @@ import {
   isOptionalDateString,
   isOptionalString,
 } from "@/lib/http";
+import { isValidAssetTagFormat } from "@/lib/asset-tag";
 import type { JobWriteInput } from "@/lib/actions/jobs";
 import type { EquipmentWriteInput } from "@/lib/actions/equipment";
 import type { CrewUpdateInput, NewCrewMember } from "@/lib/actions/crew";
@@ -160,6 +161,17 @@ export function validateEquipmentInput(
       return { error: badRequest(`\`${key}\` must be a string.`) };
     }
   }
+  if (
+    body.assetTag !== undefined &&
+    (!isNonEmptyString(body.assetTag) ||
+      !isValidAssetTagFormat((body.assetTag as string).trim().toUpperCase()))
+  ) {
+    return {
+      error: badRequest(
+        "`assetTag` must match the format XX-000 (2-letter prefix + 3-digit number).",
+      ),
+    };
+  }
 
   const input: EquipmentWriteInput = {};
   if (body.name !== undefined) input.name = (body.name as string).trim();
@@ -173,6 +185,9 @@ export function validateEquipmentInput(
   }
   if (body.jobId !== undefined) input.jobId = body.jobId as string | null;
   if (body.notes !== undefined) input.notes = body.notes as string | null;
+  if (body.assetTag !== undefined) {
+    input.assetTag = (body.assetTag as string).trim().toUpperCase();
+  }
   return { input };
 }
 

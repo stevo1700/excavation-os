@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 import { equipment as mockEquipment } from "@/lib/data";
+import { nextAssetTag } from "@/lib/asset-tag";
+import { generateQrSvg, qrUrlForTag } from "@/lib/qr";
 import type {
   Equipment,
   EquipmentCategory,
@@ -33,6 +35,7 @@ function toUiEquipment(machine: {
   type: string;
   status: string;
   jobId: string | null;
+  assetTag: string;
   job: { address: string | null } | null;
 }): Equipment {
   return {
@@ -42,6 +45,7 @@ function toUiEquipment(machine: {
     status: toUiStatus(machine.status),
     location: machine.job?.address ?? "Yard",
     assignedJob: machine.jobId,
+    assetTag: machine.assetTag,
     hoursLogged: 0,
     nextServiceHours: 0,
   };
@@ -90,16 +94,27 @@ export interface EquipmentWriteInput {
   serialNumber?: string | null;
   jobId?: string | null;
   notes?: string | null;
+  /** Short tag like "EX-310". Auto-generated from `type` when omitted on create. */
+  assetTag?: string;
 }
 
-/** Create an equipment record from a JSON payload, returned in UI shape. */
+/**
+ * Create an equipment record from a JSON payload, returned in UI shape.
+ * `assetTag` is auto-generated from `type` when not supplied; the QR code
+ * (qrUrl/qrSvg) is always (re)generated to match the resulting tag.
+ */
 export async function createEquipmentRecord(
   input: EquipmentWriteInput,
 ): Promise<Equipment> {
+  const type = input.type ?? "";
+  const assetTag = input.assetTag ?? (await nextAssetTag(type));
+  const qrUrl = qrUrlForTag(assetTag);
+  const qrSvg = await generateQrSvg(qrUrl);
+
   const machine = await prisma.equipment.create({
     data: {
       name: input.name ?? "",
-      type: input.type ?? "",
+      type,
       status: input.status ? dbStatus[input.status] : "AVAILABLE",
       make: input.make ?? null,
       model: input.model ?? null,
@@ -107,6 +122,9 @@ export async function createEquipmentRecord(
       serialNumber: input.serialNumber ?? null,
       jobId: input.jobId ?? null,
       notes: input.notes ?? null,
+      assetTag,
+      qrUrl,
+      qrSvg,
     },
     include: { job: true },
   });
@@ -116,7 +134,8 @@ export async function createEquipmentRecord(
 
 /**
  * Apply a partial update to an equipment record, returned in UI shape, or null
- * if no record with that id exists.
+ * if no record with that id exists. The QR code is regenerated whenever
+ * `assetTag` changes; other field changes leave it untouched.
  */
 export async function updateEquipmentRecord(
   id: string,
@@ -124,6 +143,14 @@ export async function updateEquipmentRecord(
 ): Promise<Equipment | null> {
   const existing = await prisma.equipment.findUnique({ where: { id } });
   if (!existing) return null;
+
+  const tagChanged =
+    input.assetTag !== undefined && input.assetTag !== existing.assetTag;
+  let qr: { qrUrl: string; qrSvg: string } | undefined;
+  if (tagChanged) {
+    const qrUrl = qrUrlForTag(input.assetTag as string);
+    qr = { qrUrl, qrSvg: await generateQrSvg(qrUrl) };
+  }
 
   const machine = await prisma.equipment.update({
     where: { id },
@@ -139,6 +166,8 @@ export async function updateEquipmentRecord(
         : {}),
       ...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.assetTag !== undefined ? { assetTag: input.assetTag } : {}),
+      ...(qr ?? {}),
     },
     include: { job: true },
   });

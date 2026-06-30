@@ -71,6 +71,8 @@ export interface Equipment {
   location: string;
   /** Job id the machine is currently working, if any. */
   assignedJob: string | null;
+  /** Short human-readable tag, e.g. "EX-310". Also the QR scan target via /e/<assetTag>. */
+  assetTag: string;
   hoursLogged: number;
   nextServiceHours: number;
 }
