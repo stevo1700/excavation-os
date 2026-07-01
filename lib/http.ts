@@ -2,6 +2,7 @@
 // They keep validation terse and the 400 responses consistently shaped.
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 /** A 400 with a descriptive message (and optional extra fields, e.g. `allowed`). */
 export function badRequest(
@@ -53,4 +54,12 @@ export function isOptionalDateString(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (typeof value !== "string") return false;
   return !Number.isNaN(new Date(value).getTime());
+}
+
+/** True if `error` is a Prisma unique-constraint violation (e.g. a duplicate asset tag). */
+export function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
 }

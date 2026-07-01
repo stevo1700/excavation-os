@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createEquipmentRecord, getEquipment } from "@/lib/actions/equipment";
-import { readJsonObject } from "@/lib/http";
+import { isUniqueConstraintError, readJsonObject } from "@/lib/http";
 import { EQUIPMENT_STATUSES, validateEquipmentInput } from "@/lib/validators";
 import type { EquipmentStatus } from "@/lib/types";
 
@@ -34,6 +34,16 @@ export async function POST(request: Request) {
   const validated = validateEquipmentInput(parsed.body, "create");
   if (validated.error) return validated.error;
 
-  const machine = await createEquipmentRecord(validated.input);
-  return NextResponse.json(machine, { status: 201 });
+  try {
+    const machine = await createEquipmentRecord(validated.input);
+    return NextResponse.json(machine, { status: 201 });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { error: "`assetTag` is already in use." },
+        { status: 400 },
+      );
+    }
+    throw error;
+  }
 }
