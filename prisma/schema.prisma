@@ -191,6 +191,9 @@ model Customer {
   id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
   name        String
   contactName String?
+  // Company / business name — distinct from `name`, which may be a contact's
+  // display name for sole-proprietor customers.
+  company     String?
   email       String?
   phone       String?
   address     String?
@@ -206,10 +209,15 @@ model Customer {
 
 model Quote {
   id          String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  // Short label shown alongside the quote number, e.g. "Phase 1 excavation".
+  title       String?
   jobId       String
   customerId  String?
   quoteNumber String    @unique
   status      String    @default("DRAFT")
+  // Legacy ad-hoc line items (kept for backward compatibility with existing
+  // quotes and the web quote-builder form). New quotes created through the
+  // catalog API also get normalized rows in `lineItemRows`.
   lineItems   Json      @default("[]")
   subtotal    Decimal   @default(0) @db.Decimal(12, 2)
   taxRate     Decimal   @default(0) @db.Decimal(5, 4)
@@ -220,9 +228,10 @@ model Quote {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  job      Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  invoices Invoice[]
+  job          Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer     Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoices     Invoice[]
+  lineItemRows QuoteLineItem[]
 }
 
 model Invoice {
@@ -232,11 +241,14 @@ model Invoice {
   quoteId       String?
   invoiceNumber String    @unique
   status        String    @default("DRAFT")
+  // Legacy ad-hoc line items — see Quote.lineItems.
   lineItems     Json      @default("[]")
   subtotal      Decimal   @default(0) @db.Decimal(12, 2)
   taxRate       Decimal   @default(0) @db.Decimal(5, 4)
   taxAmount     Decimal   @default(0) @db.Decimal(12, 2)
   total         Decimal   @default(0) @db.Decimal(12, 2)
+  // Denormalized sum of `payments.amount`, kept in sync by the payment
+  // endpoints and by the legacy one-shot markInvoicePaid() action.
   amountPaid    Decimal   @default(0) @db.Decimal(12, 2)
   dueDate       DateTime? @db.Date
   paidAt        DateTime?
@@ -244,7 +256,127 @@ model Invoice {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  job      Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  quote    Quote?    @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  job          Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer     Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  quote        Quote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  lineItemRows InvoiceLineItem[]
+  payments     Payment[]
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Catalog: reusable line-item library + normalized quote/invoice
+// line items + payment history. Additive: existing Quote/Invoice.lineItems
+// (JSON) keeps working unchanged for pre-existing rows and the web
+// quote/invoice forms; these tables back the new /api/catalog/* endpoints.
+// ---------------------------------------------------------------------------
+
+model CatalogItem {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  // Free-text unit, e.g. "each", "hr", "day", "ton", "sqft".
+  unit        String
+  unitPrice   Decimal  @default(0) @db.Decimal(12, 2)
+  // LABOR / EQUIPMENT / MATERIAL / SUBCONTRACT / OTHER
+  category    String   @default("OTHER")
+  taxable     Boolean  @default(true)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quoteLineItems   QuoteLineItem[]
+  invoiceLineItems InvoiceLineItem[]
+}
+
+model QuoteLineItem {
+  id            String  @id @default(cuid())
+  quoteId       String
+  // Optional — a line item can reference the catalog or be fully ad-hoc.
+  catalogItemId String?
+  description   String
+  quantity      Decimal @default(1) @db.Decimal(12, 2)
+  unitPrice     Decimal @default(0) @db.Decimal(12, 2)
+  amount        Decimal @default(0) @db.Decimal(12, 2)
+  sortOrder     Int     @default(0)
+
+  quote       Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+}
+
+model InvoiceLineItem {
+  id            String  @id @default(cuid())
+  invoiceId     String
+  catalogItemId String?
+  description   String
+  quantity      Decimal @default(1) @db.Decimal(12, 2)
+  unitPrice     Decimal @default(0) @db.Decimal(12, 2)
+  amount        Decimal @default(0) @db.Decimal(12, 2)
+  sortOrder     Int     @default(0)
+
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  amount    Decimal  @db.Decimal(12, 2)
+  // CASH / CHECK / CARD / TRANSFER / OTHER
+  method    String   @default("OTHER")
+  reference String?
+  paidAt    DateTime @default(now())
+  notes     String?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9 — Equipment telematics integrations (Komatsu / Case / Bobcat, AEMP
+// 2.0). Additive; no relation to existing models other than a soft (non-FK)
+// link from TelematicsAsset.assetTag to Equipment.assetTag when matched.
+// ---------------------------------------------------------------------------
+
+model TelematicsConnection {
+  id                   String    @id @default(cuid())
+  // KOMATSU / CASE / BOBCAT — one connection per OEM.
+  oem                  String    @unique
+  // DISCONNECTED / CONNECTED / ERROR
+  status               String    @default("DISCONNECTED")
+  // AES-256-GCM ciphertext (see lib/crypto.ts); never stores plaintext.
+  encryptedCredentials String?
+  lastSyncAt           DateTime?
+  lastError            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  assets TelematicsAsset[]
+}
+
+model TelematicsAsset {
+  id              String    @id @default(cuid())
+  connectionId    String
+  // Denormalized copy of the parent connection's oem, for a simple composite
+  // unique constraint without a join.
+  oem             String
+  externalAssetId String
+  make            String?
+  model           String?
+  serial          String?
+  // Best-effort match to Equipment.assetTag (by serial number); null if
+  // unmatched. Not a hard FK — a sync can report machines this app doesn't
+  // have an Equipment row for yet.
+  assetTag        String?
+  lat             Float?
+  lng             Float?
+  engineHours     Float?
+  fuelPercent     Float?
+  faultCodes      Json      @default("[]")
+  lastReportedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  connection TelematicsConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([oem, externalAssetId])
 }
