@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { convertQuoteToInvoiceRecord } from "@/lib/actions/quotes";
 import { getInvoice } from "@/lib/actions/invoices";
+import {
+  isMissingTableOrColumnError,
+  schemaMismatchResponse,
+} from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +17,19 @@ export async function POST(
   _request: Request,
   { params }: { params: { id: string } },
 ) {
-  const result = await convertQuoteToInvoiceRecord(params.id);
-  if (!result.ok || !result.invoiceId) {
-    const notFound = result.error === "Quote not found.";
-    return NextResponse.json(
-      { error: result.error },
-      { status: notFound ? 404 : 400 },
-    );
+  try {
+    const result = await convertQuoteToInvoiceRecord(params.id);
+    if (!result.ok || !result.invoiceId) {
+      const notFound = result.error === "Quote not found.";
+      return NextResponse.json(
+        { error: result.error },
+        { status: notFound ? 404 : 400 },
+      );
+    }
+    const invoice = await getInvoice(result.invoiceId);
+    return NextResponse.json(invoice, { status: 201 });
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
   }
-  const invoice = await getInvoice(result.invoiceId);
-  return NextResponse.json(invoice, { status: 201 });
 }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getInvoice, updateInvoiceRecord } from "@/lib/actions/invoices";
-import { readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validateInvoiceInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -28,9 +32,14 @@ export async function PATCH(
   const validated = validateInvoiceInput(parsed.body, "update");
   if (validated.error) return validated.error;
 
-  const invoice = await updateInvoiceRecord(params.id, validated.input);
-  if (!invoice) {
-    return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+  try {
+    const invoice = await updateInvoiceRecord(params.id, validated.input);
+    if (!invoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+    return NextResponse.json(invoice);
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
   }
-  return NextResponse.json(invoice);
 }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createQuoteRecord, getQuotes } from "@/lib/actions/quotes";
-import { readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validateQuoteInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +28,11 @@ export async function POST(request: Request) {
   const validated = validateQuoteInput(parsed.body, "create");
   if (validated.error) return validated.error;
 
-  const quote = await createQuoteRecord(validated.input);
-  return NextResponse.json(quote, { status: 201 });
+  try {
+    const quote = await createQuoteRecord(validated.input);
+    return NextResponse.json(quote, { status: 201 });
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
+  }
 }

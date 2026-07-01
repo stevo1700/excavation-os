@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createInvoiceRecord, getInvoices } from "@/lib/actions/invoices";
-import { readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validateInvoiceInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +28,11 @@ export async function POST(request: Request) {
   const validated = validateInvoiceInput(parsed.body, "create");
   if (validated.error) return validated.error;
 
-  const invoice = await createInvoiceRecord(validated.input);
-  return NextResponse.json(invoice, { status: 201 });
+  try {
+    const invoice = await createInvoiceRecord(validated.input);
+    return NextResponse.json(invoice, { status: 201 });
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
+  }
 }

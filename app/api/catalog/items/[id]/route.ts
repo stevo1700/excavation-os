@@ -3,7 +3,12 @@ import {
   getCatalogItem,
   updateCatalogItemRecord,
 } from "@/lib/actions/catalog-items";
-import { isUniqueConstraintError, readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  isUniqueConstraintError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validateCatalogItemInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +55,7 @@ export async function PATCH(
         { status: 400 },
       );
     }
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
     throw error;
   }
 }
