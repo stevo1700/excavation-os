@@ -16,6 +16,8 @@ const isWritableApiResource = createRouteMatcher([
   "/api/jobs(.*)",
   "/api/equipment(.*)",
   "/api/crew(.*)",
+  "/api/catalog(.*)",
+  "/api/integrations(.*)",
 ]);
 
 // Read-only HTTP methods that never require auth.

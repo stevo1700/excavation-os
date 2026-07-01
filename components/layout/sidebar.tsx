@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BookOpen,
   CalendarDays,
   Clock,
   FileText,
@@ -11,6 +12,7 @@ import {
   LayoutDashboard,
   Menu,
   Mountain,
+  Plug,
   Receipt,
   Truck,
   Users2,
@@ -30,6 +32,8 @@ const navItems = [
   { href: "/dashboard/customers", label: "Customers", icon: Users2 },
   { href: "/dashboard/quotes", label: "Quotes", icon: FileText },
   { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
+  { href: "/dashboard/catalog", label: "Catalog", icon: BookOpen },
+  { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
 ];
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {

@@ -20,19 +20,24 @@ loaded, the dashboard shows live data that matches the demo content.
 
 ## Routes
 
-| Path                   | Description                                          |
-| ---------------------- | --------------------------------------------------- |
-| `/`                    | Landing page                                        |
-| `/sign-in`             | Clerk sign-in (dark amber theme)                    |
-| `/sign-up`             | Clerk sign-up (dark amber theme)                    |
-| `/dashboard`           | Operations overview with KPI cards                  |
-| `/dashboard/jobs`      | Jobs grid — status, progress, value                 |
-| `/dashboard/equipment` | Equipment / fleet list (DB-backed via server action)|
-| `/dashboard/crew`      | Crew roster (DB-backed via server action)           |
-| `/dashboard/schedule`  | Weekly schedule                                     |
+| Path                      | Description                                          |
+| ------------------------- | ---------------------------------------------------- |
+| `/`                       | Landing page                                         |
+| `/sign-in`                | Clerk sign-in (dark amber theme)                     |
+| `/sign-up`                | Clerk sign-up (dark amber theme)                     |
+| `/dashboard`              | Operations overview with KPI cards                   |
+| `/dashboard/jobs`         | Jobs grid — status, progress, value                  |
+| `/dashboard/equipment`    | Equipment / fleet list (DB-backed via server action) |
+| `/dashboard/crew`         | Crew roster (DB-backed via server action)            |
+| `/dashboard/schedule`     | Weekly schedule                                      |
+| `/dashboard/catalog`      | Quotes/invoices overview + reusable item library     |
+| `/dashboard/integrations` | OEM telematics (Komatsu, Case, Bobcat) connections   |
 
 Everything under `/dashboard` is protected by Clerk middleware; unauthenticated
-visitors are redirected to `/sign-in`.
+visitors are redirected to `/sign-in`. Non-GET requests under `/api/jobs`,
+`/api/equipment`, `/api/crew`, `/api/catalog`, and `/api/integrations` also
+require an authenticated session (401 JSON response otherwise); their GET
+endpoints are public.
 
 ## Getting started
 
@@ -68,6 +73,20 @@ CLERK_SECRET_KEY=sk_test_...
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/excavation_os?schema=public"
 ```
 
+**Telematics integrations (optional)** — only needed to connect a real OEM
+account under `/dashboard/integrations`:
+
+```
+# Required for credential encryption at rest (AES-256-GCM).
+ENCRYPTION_KEY="a long random secret"
+
+# Each OEM's AEMP 2.0 base URL is dealer/account-specific — there is no
+# global default. Only needed for the OEMs you actually connect.
+KOMATSU_AEMP_BASE_URL="https://<your-komtrax-endpoint>"
+CASE_AEMP_BASE_URL="https://<your-sitewatch-endpoint>"
+BOBCAT_AEMP_BASE_URL="https://<your-machine-iq-endpoint>"
+```
+
 ### 3. Set up the database
 
 ```bash
@@ -83,17 +102,17 @@ npm run dev      # http://localhost:3000
 
 ## Scripts
 
-| Script                 | Purpose                              |
-| ---------------------- | ------------------------------------ |
-| `npm run dev`          | Start the dev server                 |
-| `npm run build`        | Production build                     |
-| `npm run start`        | Serve the production build           |
-| `npm run lint`         | ESLint                               |
-| `npm run typecheck`    | TypeScript, no emit                  |
-| `npm run format`       | Format with Prettier                 |
-| `npm run db:migrate`   | `prisma migrate dev`                 |
-| `npm run db:seed`      | `prisma db seed`                     |
-| `npm run db:studio`    | Open Prisma Studio                   |
+| Script               | Purpose                    |
+| -------------------- | -------------------------- |
+| `npm run dev`        | Start the dev server       |
+| `npm run build`      | Production build           |
+| `npm run start`      | Serve the production build |
+| `npm run lint`       | ESLint                     |
+| `npm run typecheck`  | TypeScript, no emit        |
+| `npm run format`     | Format with Prettier       |
+| `npm run db:migrate` | `prisma migrate dev`       |
+| `npm run db:seed`    | `prisma db seed`           |
+| `npm run db:studio`  | Open Prisma Studio         |
 
 ## Project structure
 

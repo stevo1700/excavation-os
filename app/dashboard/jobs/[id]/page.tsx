@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FilePlus2, Pencil } from "lucide-react";
 import { Badge, statusTone } from "@/components/ui/badge";
+import { Card, CardHeader } from "@/components/ui/card";
+import { FinanceStatusBadge } from "@/components/finance/status-badge";
 import { JobDetailTabs } from "@/components/jobs/job-detail-tabs";
 import { PortalShare } from "@/components/jobs/portal-share";
 import { getJob } from "@/lib/actions/jobs";
@@ -9,7 +11,9 @@ import { getCrew } from "@/lib/actions/crew";
 import { getEquipment } from "@/lib/actions/equipment";
 import { getReportsForJob } from "@/lib/actions/reports";
 import { getTimesheetEntries } from "@/lib/actions/timesheets";
-import { jobColor } from "@/lib/utils";
+import { getQuotes } from "@/lib/actions/quotes";
+import { getInvoices } from "@/lib/actions/invoices";
+import { formatCurrency, jobColor } from "@/lib/utils";
 
 // Render per-request so the detail reflects live database state.
 export const metadata = { title: "Job Details" };
@@ -24,12 +28,15 @@ export default async function JobDetailPage({
   const job = await getJob(params.id);
   if (!job) notFound();
 
-  const [crew, equipment, reports, timesheets] = await Promise.all([
-    getCrew(),
-    getEquipment(),
-    getReportsForJob(job.id),
-    getTimesheetEntries({ jobId: job.id }),
-  ]);
+  const [crew, equipment, reports, timesheets, quotes, invoices] =
+    await Promise.all([
+      getCrew(),
+      getEquipment(),
+      getReportsForJob(job.id),
+      getTimesheetEntries({ jobId: job.id }),
+      getQuotes({ jobId: job.id }),
+      getInvoices({ jobId: job.id }),
+    ]);
 
   const jobCrew = crew.filter((member) => member.assignedJob === job.id);
   const jobEquipment = equipment.filter(
@@ -84,6 +91,67 @@ export default async function JobDetailPage({
       <div className="mb-6">
         <PortalShare jobId={job.id} />
       </div>
+
+      {quotes.length > 0 || invoices.length > 0 ? (
+        <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          {quotes.length > 0 ? (
+            <Card>
+              <CardHeader
+                title="Quotes"
+                description={`${quotes.length} linked`}
+              />
+              <ul className="divide-y divide-slate-100">
+                {quotes.map((quote) => (
+                  <li key={quote.id}>
+                    <Link
+                      href={`/dashboard/quotes/${quote.id}`}
+                      className="flex items-center justify-between gap-3 px-5 py-3 text-sm transition-colors hover:bg-slate-50"
+                    >
+                      <span className="font-medium text-slate-900">
+                        {quote.quoteNumber}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="tabular-nums text-slate-500">
+                          {formatCurrency(quote.total)}
+                        </span>
+                        <FinanceStatusBadge status={quote.status} />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+          {invoices.length > 0 ? (
+            <Card>
+              <CardHeader
+                title="Invoices"
+                description={`${invoices.length} linked`}
+              />
+              <ul className="divide-y divide-slate-100">
+                {invoices.map((invoice) => (
+                  <li key={invoice.id}>
+                    <Link
+                      href={`/dashboard/invoices/${invoice.id}`}
+                      className="flex items-center justify-between gap-3 px-5 py-3 text-sm transition-colors hover:bg-slate-50"
+                    >
+                      <span className="font-medium text-slate-900">
+                        {invoice.invoiceNumber}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="tabular-nums text-slate-500">
+                          {formatCurrency(invoice.total)}
+                        </span>
+                        <FinanceStatusBadge status={invoice.status} />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
 
       <JobDetailTabs
         job={job}

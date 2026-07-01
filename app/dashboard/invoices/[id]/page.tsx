@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/card";
 import { FinanceStatusBadge } from "@/components/finance/status-badge";
 import { LineItemsTable } from "@/components/finance/line-items-table";
+import { RecordPaymentForm } from "@/components/finance/record-payment-form";
 import {
   getInvoice,
   markInvoicePaid,
@@ -53,7 +54,21 @@ export default async function InvoiceDetailPage({
           </div>
           <p className="mt-1 text-sm text-slate-500">
             {invoice.jobName}
-            {invoice.customerName ? ` · ${invoice.customerName}` : ""}
+            {invoice.customerName ? (
+              <>
+                {" · "}
+                {invoice.customerId ? (
+                  <Link
+                    href={`/dashboard/customers/${invoice.customerId}`}
+                    className="text-brand-600 hover:text-brand-700"
+                  >
+                    {invoice.customerName}
+                  </Link>
+                ) : (
+                  invoice.customerName
+                )}
+              </>
+            ) : null}
             {invoice.dueDate ? ` · due ${formatDate(invoice.dueDate)}` : ""}
           </p>
           {invoice.quoteId ? (
@@ -145,6 +160,46 @@ export default async function InvoiceDetailPage({
           </div>
         </CardBody>
       </Card>
+
+      <Card className="mb-6">
+        <CardBody>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">
+            Record a payment
+          </h3>
+          <RecordPaymentForm invoiceId={invoice.id} />
+        </CardBody>
+      </Card>
+
+      {invoice.payments.length > 0 ? (
+        <Card className="mb-6">
+          <CardBody>
+            <h3 className="mb-3 text-sm font-semibold text-slate-900">
+              Payment history
+            </h3>
+            <ul className="divide-y divide-slate-100">
+              {invoice.payments.map((payment) => (
+                <li
+                  key={payment.id}
+                  className="flex items-center justify-between py-2.5 text-sm"
+                >
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      {formatCurrency(payment.amount)}{" "}
+                      <span className="font-normal text-slate-400">
+                        · {payment.method.toLowerCase()}
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {new Date(payment.paidAt).toLocaleString()}
+                      {payment.reference ? ` · ref ${payment.reference}` : ""}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      ) : null}
 
       {invoice.notes ? (
         <Card>

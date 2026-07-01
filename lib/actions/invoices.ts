@@ -6,12 +6,14 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 import { computeTotals, parseLineItems } from "@/lib/finance";
+import { resolveLineItems, type LineItemInput } from "@/lib/actions/quotes";
 import type { LineItem } from "@/lib/types";
 
 export interface InvoiceListItem {
   id: string;
   invoiceNumber: string;
   jobName: string;
+  customerId: string | null;
   customerName: string | null;
   status: string;
   total: number;
@@ -25,6 +27,7 @@ export interface InvoiceDetail {
   status: string;
   jobId: string;
   jobName: string;
+  customerId: string | null;
   customerName: string | null;
   quoteId: string | null;
   quoteNumber: string | null;
@@ -38,6 +41,16 @@ export interface InvoiceDetail {
   paidAt: string | null;
   notes: string | null;
   createdAt: string;
+  payments: PaymentRecord[];
+}
+
+export interface PaymentRecord {
+  id: string;
+  amount: number;
+  method: string;
+  reference: string | null;
+  paidAt: string;
+  notes: string | null;
 }
 
 export interface FinancialSummary {
@@ -74,6 +87,7 @@ export async function getInvoices(
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       jobName: invoice.job.name,
+      customerId: invoice.customerId,
       customerName: invoice.customer?.name ?? null,
       status: invoice.status,
       total: invoice.total.toNumber(),
@@ -86,12 +100,17 @@ export async function getInvoices(
   }
 }
 
-/** A single invoice with job + customer + quote, or null. */
+/** A single invoice with job + customer + quote + payment history, or null. */
 export async function getInvoice(id: string): Promise<InvoiceDetail | null> {
   try {
     const invoice = await prisma.invoice.findUnique({
       where: { id },
-      include: { job: true, customer: true, quote: true },
+      include: {
+        job: true,
+        customer: true,
+        quote: true,
+        payments: { orderBy: { paidAt: "desc" } },
+      },
     });
     if (!invoice) return null;
     return {
@@ -100,6 +119,7 @@ export async function getInvoice(id: string): Promise<InvoiceDetail | null> {
       status: invoice.status,
       jobId: invoice.jobId,
       jobName: invoice.job.name,
+      customerId: invoice.customerId,
       customerName: invoice.customer?.name ?? null,
       quoteId: invoice.quoteId,
       quoteNumber: invoice.quote?.quoteNumber ?? null,
@@ -113,6 +133,14 @@ export async function getInvoice(id: string): Promise<InvoiceDetail | null> {
       paidAt: isoDate(invoice.paidAt),
       notes: invoice.notes,
       createdAt: invoice.createdAt.toISOString().slice(0, 10),
+      payments: invoice.payments.map((p) => ({
+        id: p.id,
+        amount: p.amount.toNumber(),
+        method: p.method,
+        reference: p.reference,
+        paidAt: p.paidAt.toISOString(),
+        notes: p.notes,
+      })),
     };
   } catch {
     return null;
@@ -120,7 +148,7 @@ export async function getInvoice(id: string): Promise<InvoiceDetail | null> {
 }
 
 // Next sequential document number, e.g. INV-2026-0007.
-async function nextInvoiceNumber(): Promise<string> {
+export async function nextInvoiceNumber(): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `INV-${year}-`;
   const count = await prisma.invoice.count({
@@ -212,6 +240,197 @@ export async function updateInvoiceStatus(
   await prisma.invoice.update({ where: { id }, data: { status } });
   revalidatePath("/dashboard/invoices");
   revalidatePath(`/dashboard/invoices/${id}`);
+}
+
+// --- JSON write API (used by /api/catalog/invoices) ----------------------------
+
+function toLineItemJson(
+  resolved: Awaited<ReturnType<typeof resolveLineItems>>,
+): LineItem[] {
+  return resolved.map((r) => ({
+    description: r.description,
+    quantity: r.quantity,
+    unitPrice: r.unitPrice,
+    lineTotal: r.amount,
+  }));
+}
+
+/** Fields accepted when creating or updating an invoice over the JSON API. */
+export interface InvoiceWriteInput {
+  jobId?: string;
+  customerId?: string | null;
+  quoteId?: string | null;
+  status?: string;
+  taxRatePercent?: number;
+  dueDate?: string | null;
+  notes?: string | null;
+  lineItems?: LineItemInput[];
+}
+
+async function toInvoiceDetail(id: string): Promise<InvoiceDetail> {
+  const detail = await getInvoice(id);
+  if (!detail) throw new Error("Invoice vanished immediately after write.");
+  return detail;
+}
+
+/** Create an invoice from a JSON payload (with normalized line items). */
+export async function createInvoiceRecord(
+  input: InvoiceWriteInput,
+): Promise<InvoiceDetail> {
+  const resolved = await resolveLineItems(input.lineItems ?? []);
+  const totals = computeTotals(
+    toLineItemJson(resolved),
+    input.taxRatePercent ?? 0,
+  );
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      jobId: input.jobId ?? "",
+      customerId: input.customerId ?? null,
+      quoteId: input.quoteId ?? null,
+      invoiceNumber: await nextInvoiceNumber(),
+      status: input.status ?? "DRAFT",
+      lineItems: toLineItemJson(resolved) as unknown as Prisma.InputJsonValue,
+      subtotal: totals.subtotal,
+      taxRate: totals.taxRate,
+      taxAmount: totals.taxAmount,
+      total: totals.total,
+      dueDate: input.dueDate ? new Date(input.dueDate) : null,
+      notes: input.notes ?? null,
+      lineItemRows: {
+        create: resolved.map((item, index) => ({
+          catalogItemId: item.catalogItemId,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          amount: item.amount,
+          sortOrder: index,
+        })),
+      },
+    },
+  });
+
+  revalidatePath("/dashboard/invoices");
+  revalidatePath("/dashboard/catalog");
+  return toInvoiceDetail(invoice.id);
+}
+
+/** Apply a partial update to an invoice (JSON API), or null if it doesn't exist. */
+export async function updateInvoiceRecord(
+  id: string,
+  input: InvoiceWriteInput,
+): Promise<InvoiceDetail | null> {
+  const existing = await prisma.invoice.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  let lineItemFields: Record<string, unknown> = {};
+  if (input.lineItems) {
+    const resolved = await resolveLineItems(input.lineItems);
+    const totals = computeTotals(
+      toLineItemJson(resolved),
+      input.taxRatePercent ?? existing.taxRate.toNumber() * 100,
+    );
+    lineItemFields = {
+      lineItems: toLineItemJson(resolved) as unknown as Prisma.InputJsonValue,
+      subtotal: totals.subtotal,
+      taxRate: totals.taxRate,
+      taxAmount: totals.taxAmount,
+      total: totals.total,
+      lineItemRows: {
+        deleteMany: {},
+        create: resolved.map((item, index) => ({
+          catalogItemId: item.catalogItemId,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          amount: item.amount,
+          sortOrder: index,
+        })),
+      },
+    };
+  }
+
+  await prisma.invoice.update({
+    where: { id },
+    data: {
+      ...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+      ...(input.customerId !== undefined
+        ? { customerId: input.customerId }
+        : {}),
+      ...(input.quoteId !== undefined ? { quoteId: input.quoteId } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.dueDate !== undefined
+        ? { dueDate: input.dueDate ? new Date(input.dueDate) : null }
+        : {}),
+      ...lineItemFields,
+    },
+  });
+
+  revalidatePath("/dashboard/invoices");
+  revalidatePath(`/dashboard/invoices/${id}`);
+  return toInvoiceDetail(id);
+}
+
+// --- Payments --------------------------------------------------------------
+
+export interface PaymentInput {
+  amount: number;
+  method?: string;
+  reference?: string | null;
+  notes?: string | null;
+}
+
+export interface RecordPaymentResult {
+  ok: boolean;
+  invoice?: InvoiceDetail;
+  error?: string;
+}
+
+/**
+ * Record a payment against an invoice: creates the Payment row, recomputes
+ * amountPaid as the sum of all payments, and sets status to PARTIAL or PAID
+ * accordingly (PAID also stamps paidAt). Returns an error result rather than
+ * throwing for an unknown invoice, so the route handler can map it to 404.
+ */
+export async function recordPayment(
+  invoiceId: string,
+  input: PaymentInput,
+): Promise<RecordPaymentResult> {
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!invoice) return { ok: false, error: "Invoice not found." };
+
+  await prisma.payment.create({
+    data: {
+      invoiceId,
+      amount: input.amount,
+      method: input.method ?? "OTHER",
+      reference: input.reference ?? null,
+      notes: input.notes ?? null,
+    },
+  });
+
+  const sum = await prisma.payment.aggregate({
+    where: { invoiceId },
+    _sum: { amount: true },
+  });
+  const amountPaid = sum._sum.amount?.toNumber() ?? 0;
+  const total = invoice.total.toNumber();
+  const status =
+    amountPaid >= total ? "PAID" : amountPaid > 0 ? "PARTIAL" : invoice.status;
+
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      amountPaid,
+      status,
+      paidAt: status === "PAID" ? new Date() : invoice.paidAt,
+    },
+  });
+
+  revalidatePath("/dashboard/invoices");
+  revalidatePath(`/dashboard/invoices/${invoiceId}`);
+  return { ok: true, invoice: await toInvoiceDetail(invoiceId) };
 }
 
 /** Headline financial figures for the overview. Returns zeros on any failure. */
