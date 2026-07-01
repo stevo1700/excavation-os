@@ -6,6 +6,7 @@ import { FinanceStatusBadge } from "@/components/finance/status-badge";
 import { LineItemsTable } from "@/components/finance/line-items-table";
 import { getQuote, updateQuoteStatus } from "@/lib/actions/quotes";
 import { createInvoiceFromQuote } from "@/lib/actions/invoices";
+import { isApprovedQuoteStatus } from "@/lib/finance";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Quote Details" };
@@ -24,6 +25,7 @@ export default async function QuoteDetailPage({
   const setAccepted = updateQuoteStatus.bind(null, quote.id, "ACCEPTED");
   const setDeclined = updateQuoteStatus.bind(null, quote.id, "DECLINED");
   const toInvoice = createInvoiceFromQuote.bind(null, quote.id);
+  const approved = isApprovedQuoteStatus(quote.status);
 
   return (
     <div>
@@ -43,9 +45,28 @@ export default async function QuoteDetailPage({
             </h2>
             <FinanceStatusBadge status={quote.status} />
           </div>
+          {quote.title ? (
+            <p className="mt-0.5 text-sm font-medium text-slate-700">
+              {quote.title}
+            </p>
+          ) : null}
           <p className="mt-1 text-sm text-slate-500">
             {quote.jobName}
-            {quote.customerName ? ` · ${quote.customerName}` : ""}
+            {quote.customerName ? (
+              <>
+                {" · "}
+                {quote.customerId ? (
+                  <Link
+                    href={`/dashboard/customers/${quote.customerId}`}
+                    className="text-brand-600 hover:text-brand-700"
+                  >
+                    {quote.customerName}
+                  </Link>
+                ) : (
+                  quote.customerName
+                )}
+              </>
+            ) : null}
             {quote.validUntil
               ? ` · valid until ${formatDate(quote.validUntil)}`
               : ""}
@@ -56,14 +77,16 @@ export default async function QuoteDetailPage({
           <StatusButton action={setSent} label="Mark as Sent" />
           <StatusButton action={setAccepted} label="Mark as Accepted" />
           <StatusButton action={setDeclined} label="Mark as Declined" />
-          <form action={toInvoice}>
-            <button
-              type="submit"
-              className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
-            >
-              Create Invoice from Quote
-            </button>
-          </form>
+          {approved ? (
+            <form action={toInvoice}>
+              <button
+                type="submit"
+                className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
+              >
+                Convert to Invoice
+              </button>
+            </form>
+          ) : null}
         </div>
       </div>
 

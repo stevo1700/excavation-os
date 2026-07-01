@@ -4,6 +4,7 @@ import { Field, Input, Textarea } from "@/components/ui/form";
 export interface CustomerFormDefaults {
   name?: string;
   contactName?: string;
+  company?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -43,6 +44,17 @@ export function CustomerForm({
             placeholder="e.g. Dana Hollis"
           />
         </Field>
+        <Field label="Company" htmlFor="company">
+          <Input
+            id="company"
+            name="company"
+            defaultValue={defaults.company}
+            placeholder="e.g. Hollis Development LLC"
+          />
+        </Field>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Phone" htmlFor="phone">
           <Input id="phone" name="phone" defaultValue={defaults.phone} />
         </Field>

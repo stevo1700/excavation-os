@@ -32,6 +32,7 @@ export default async function EditCustomerPage({
         defaults={{
           name: customer.name,
           contactName: customer.contactName ?? undefined,
+          company: customer.company ?? undefined,
           email: customer.email ?? undefined,
           phone: customer.phone ?? undefined,
           address: customer.address ?? undefined,

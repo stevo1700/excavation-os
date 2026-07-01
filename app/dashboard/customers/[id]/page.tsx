@@ -33,7 +33,11 @@ export default async function CustomerDetailPage({
 
       <PageHeader
         title={customer.name}
-        description={customer.contactName ?? undefined}
+        description={
+          [customer.contactName, customer.company]
+            .filter(Boolean)
+            .join(" · ") || undefined
+        }
         action={
           <Link
             href={`/dashboard/customers/${customer.id}/edit`}

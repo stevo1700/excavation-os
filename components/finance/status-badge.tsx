@@ -5,8 +5,11 @@ const tones: Record<string, string> = {
   DRAFT: "bg-slate-100 text-slate-600",
   SENT: "bg-sky-100 text-sky-700",
   ACCEPTED: "bg-emerald-100 text-emerald-700",
+  APPROVED: "bg-emerald-100 text-emerald-700",
   PAID: "bg-emerald-100 text-emerald-700",
+  PARTIAL: "bg-amber-100 text-amber-800",
   DECLINED: "bg-rose-100 text-rose-700",
+  EXPIRED: "bg-rose-100 text-rose-700",
   OVERDUE: "bg-amber-100 text-amber-800",
   VOID: "bg-slate-200 text-slate-500",
 };
