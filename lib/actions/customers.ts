@@ -16,6 +16,7 @@ export interface CustomerListItem {
   id: string;
   name: string;
   contactName: string | null;
+  company: string | null;
   email: string | null;
   phone: string | null;
   jobCount: number;
@@ -26,6 +27,7 @@ export interface CustomerDetail {
   id: string;
   name: string;
   contactName: string | null;
+  company: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -63,6 +65,7 @@ export async function getCustomers(): Promise<CustomerListItem[]> {
       id: customer.id,
       name: customer.name,
       contactName: customer.contactName,
+      company: customer.company,
       email: customer.email,
       phone: customer.phone,
       jobCount: customer.jobs.length,
@@ -108,6 +111,7 @@ export async function getCustomer(id: string): Promise<CustomerDetail | null> {
       id: customer.id,
       name: customer.name,
       contactName: customer.contactName,
+      company: customer.company,
       email: customer.email,
       phone: customer.phone,
       address: customer.address,
@@ -141,6 +145,7 @@ function parseCustomerForm(formData: FormData) {
   return {
     name: field(formData, "name"),
     contactName: field(formData, "contactName") || null,
+    company: field(formData, "company") || null,
     email: field(formData, "email") || null,
     phone: field(formData, "phone") || null,
     address: field(formData, "address") || null,
@@ -178,6 +183,88 @@ export async function deleteCustomer(id: string): Promise<void> {
   await prisma.customer.delete({ where: { id } });
   revalidatePath("/dashboard/customers");
   redirect("/dashboard/customers");
+}
+
+// --- JSON write API (used by /api/catalog/customers) --------------------------
+
+export interface CustomerWriteInput {
+  name?: string;
+  contactName?: string | null;
+  company?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+}
+
+function toListItem(customer: {
+  id: string;
+  name: string;
+  contactName: string | null;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  jobs: { contractValue: number }[];
+}): CustomerListItem {
+  return {
+    id: customer.id,
+    name: customer.name,
+    contactName: customer.contactName,
+    company: customer.company,
+    email: customer.email,
+    phone: customer.phone,
+    jobCount: customer.jobs.length,
+    totalValue: customer.jobs.reduce((sum, job) => sum + job.contractValue, 0),
+  };
+}
+
+/** Create a customer from a JSON payload, returned in list-item shape. */
+export async function createCustomerRecord(
+  input: CustomerWriteInput,
+): Promise<CustomerListItem> {
+  const customer = await prisma.customer.create({
+    data: {
+      name: input.name ?? "",
+      contactName: input.contactName ?? null,
+      company: input.company ?? null,
+      email: input.email ?? null,
+      phone: input.phone ?? null,
+      address: input.address ?? null,
+      notes: input.notes ?? null,
+    },
+    include: { jobs: { select: { contractValue: true } } },
+  });
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/catalog");
+  return toListItem(customer);
+}
+
+/** Apply a partial update to a customer, or null if it doesn't exist. */
+export async function updateCustomerRecord(
+  id: string,
+  input: CustomerWriteInput,
+): Promise<CustomerListItem | null> {
+  const existing = await prisma.customer.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  const customer = await prisma.customer.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.contactName !== undefined
+        ? { contactName: input.contactName }
+        : {}),
+      ...(input.company !== undefined ? { company: input.company } : {}),
+      ...(input.email !== undefined ? { email: input.email } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      ...(input.address !== undefined ? { address: input.address } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+    },
+    include: { jobs: { select: { contractValue: true } } },
+  });
+  revalidatePath("/dashboard/customers");
+  revalidatePath(`/dashboard/customers/${id}`);
+  return toListItem(customer);
 }
 
 // --- CRM pipeline board -------------------------------------------------------

@@ -56,3 +56,8 @@ export function computeTotals(
   const total = round(subtotal + taxAmount, 2);
   return { subtotal, taxRate, taxAmount, total };
 }
+
+/** ACCEPTED (the existing web UI's term) and APPROVED (the catalog spec's term) are synonyms. */
+export function isApprovedQuoteStatus(status: string): boolean {
+  return ["ACCEPTED", "APPROVED"].includes(status.toUpperCase());
+}
