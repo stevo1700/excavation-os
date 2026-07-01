@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getCustomer, updateCustomerRecord } from "@/lib/actions/customers";
-import { readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validateCustomerInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -28,9 +32,17 @@ export async function PATCH(
   const validated = validateCustomerInput(parsed.body, "update");
   if (validated.error) return validated.error;
 
-  const customer = await updateCustomerRecord(params.id, validated.input);
-  if (!customer) {
-    return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  try {
+    const customer = await updateCustomerRecord(params.id, validated.input);
+    if (!customer) {
+      return NextResponse.json(
+        { error: "Customer not found" },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(customer);
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
   }
-  return NextResponse.json(customer);
 }

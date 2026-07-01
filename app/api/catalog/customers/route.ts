@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createCustomerRecord, getCustomers } from "@/lib/actions/customers";
-import { readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validateCustomerInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +23,11 @@ export async function POST(request: Request) {
   const validated = validateCustomerInput(parsed.body, "create");
   if (validated.error) return validated.error;
 
-  const customer = await createCustomerRecord(validated.input);
-  return NextResponse.json(customer, { status: 201 });
+  try {
+    const customer = await createCustomerRecord(validated.input);
+    return NextResponse.json(customer, { status: 201 });
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
+  }
 }

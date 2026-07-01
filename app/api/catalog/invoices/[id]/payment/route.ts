@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { recordPayment } from "@/lib/actions/invoices";
-import { readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validatePaymentInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +24,14 @@ export async function POST(
   const validated = validatePaymentInput(parsed.body);
   if (validated.error) return validated.error;
 
-  const result = await recordPayment(params.id, validated.input);
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 404 });
+  try {
+    const result = await recordPayment(params.id, validated.input);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 404 });
+    }
+    return NextResponse.json(result.invoice, { status: 201 });
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
   }
-  return NextResponse.json(result.invoice, { status: 201 });
 }

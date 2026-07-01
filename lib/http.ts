@@ -63,3 +63,28 @@ export function isUniqueConstraintError(error: unknown): boolean {
     error.code === "P2002"
   );
 }
+
+/**
+ * True if `error` is Prisma reporting that a table/column the schema expects
+ * doesn't exist in the database (P2021/P2022) — i.e. `prisma generate` ran
+ * (the client's TypeScript types match schema.prisma) but the corresponding
+ * `prisma db push` / migration was never applied to this DATABASE_URL, so the
+ * physical database is still on an older shape.
+ */
+export function isMissingTableOrColumnError(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2021" || error.code === "P2022")
+  );
+}
+
+/** A clear 503 for {@link isMissingTableOrColumnError}, instead of an opaque 500. */
+export function schemaMismatchResponse(): NextResponse {
+  return NextResponse.json(
+    {
+      error:
+        "This feature's database schema hasn't been applied yet. Run `npx prisma db push` against the configured DATABASE_URL, then retry.",
+    },
+    { status: 503 },
+  );
+}

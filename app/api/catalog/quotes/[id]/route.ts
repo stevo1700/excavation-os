@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getQuote, updateQuoteRecord } from "@/lib/actions/quotes";
-import { readJsonObject } from "@/lib/http";
+import {
+  isMissingTableOrColumnError,
+  readJsonObject,
+  schemaMismatchResponse,
+} from "@/lib/http";
 import { validateQuoteInput } from "@/lib/validators-catalog";
 
 export const dynamic = "force-dynamic";
@@ -28,9 +32,14 @@ export async function PATCH(
   const validated = validateQuoteInput(parsed.body, "update");
   if (validated.error) return validated.error;
 
-  const quote = await updateQuoteRecord(params.id, validated.input);
-  if (!quote) {
-    return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+  try {
+    const quote = await updateQuoteRecord(params.id, validated.input);
+    if (!quote) {
+      return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+    }
+    return NextResponse.json(quote);
+  } catch (error) {
+    if (isMissingTableOrColumnError(error)) return schemaMismatchResponse();
+    throw error;
   }
-  return NextResponse.json(quote);
 }
