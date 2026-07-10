@@ -21,6 +21,7 @@ import { PortalShare } from "@/components/jobs/portal-share";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import type { JobBudgetSnapshot } from "@/lib/actions/budget";
 import type { CatalogItemRecord } from "@/lib/actions/catalog-items";
+import type { BudgetTemplateListItem } from "@/lib/actions/budget-templates";
 import type { JobAssignmentView } from "@/lib/actions/assignments";
 import type {
   ContractTemplateView,
@@ -60,6 +61,7 @@ export function JobWorkspace({
   financials,
   budget,
   catalogItems,
+  budgetTemplates,
   quotes,
   invoices,
   assignments,
@@ -78,6 +80,7 @@ export function JobWorkspace({
   financials: JobFinancialSnapshot;
   budget: JobBudgetSnapshot;
   catalogItems: CatalogItemRecord[];
+  budgetTemplates: BudgetTemplateListItem[];
   quotes: {
     id: string;
     quoteNumber: string;
@@ -213,6 +216,7 @@ export function JobWorkspace({
           jobId={job.id}
           budget={budget}
           catalogItems={catalogItems}
+          budgetTemplates={budgetTemplates}
           quoteOptions={quotes.map((q) => ({
             id: q.id,
             quoteNumber: q.quoteNumber,

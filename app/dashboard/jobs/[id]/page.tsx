@@ -15,6 +15,7 @@ import {
   getJobContracts,
 } from "@/lib/actions/contracts";
 import { getJobTasks } from "@/lib/actions/tasks";
+import { getBudgetTemplates } from "@/lib/actions/budget-templates";
 
 export const metadata = { title: "Job Details" };
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function JobDetailPage({
     contractTemplates,
     jobContracts,
     tasks,
+    budgetTemplates,
   ] = await Promise.all([
     getCrew(),
     getEquipment(),
@@ -59,6 +61,7 @@ export default async function JobDetailPage({
     getContractTemplates(true),
     getJobContracts(job.id),
     getJobTasks(job.id),
+    getBudgetTemplates(true),
   ]);
 
   const activeCrewIds = new Set(
@@ -97,6 +100,7 @@ export default async function JobDetailPage({
         financials={financials}
         budget={budget}
         catalogItems={catalogItems}
+        budgetTemplates={budgetTemplates}
         quotes={quotes.map((q) => ({
           id: q.id,
           quoteNumber: q.quoteNumber,

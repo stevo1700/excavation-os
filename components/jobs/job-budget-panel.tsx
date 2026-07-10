@@ -11,7 +11,13 @@ import {
   updateBudgetEstimateForm,
   type JobBudgetSnapshot,
 } from "@/lib/actions/budget";
+import {
+  applyBudgetTemplateForm,
+  saveJobBudgetAsTemplate,
+  type BudgetTemplateListItem,
+} from "@/lib/actions/budget-templates";
 import type { CatalogItemRecord } from "@/lib/actions/catalog-items";
+import Link from "next/link";
 import { CATALOG_CATEGORIES } from "@/lib/catalog-categories";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { cn, formatCurrency, humanize } from "@/lib/utils";
@@ -29,17 +35,21 @@ export function JobBudgetPanel({
   budget,
   catalogItems,
   quoteOptions,
+  budgetTemplates = [],
 }: {
   jobId: string;
   budget: JobBudgetSnapshot;
   catalogItems: CatalogItemRecord[];
   quoteOptions: { id: string; quoteNumber: string; status: string }[];
+  budgetTemplates?: BudgetTemplateListItem[];
 }) {
   const [view, setView] = useState<BudgetView>("estimate");
   const addLine = addBudgetLineForm.bind(null, jobId);
   const importQuote = importBudgetFromQuoteForm.bind(null, jobId);
   const makeQuote = createQuoteFromBudgetForm.bind(null, jobId);
   const makeInvoice = createInvoiceFromBudgetForm.bind(null, jobId);
+  const applyTemplate = applyBudgetTemplateForm.bind(null, jobId);
+  const saveTemplate = saveJobBudgetAsTemplate.bind(null, jobId);
 
   const over = budget.variance > 0;
   const under = budget.variance < 0;
@@ -91,6 +101,75 @@ export function JobBudgetPanel({
           label="Invoiced"
           value={formatCurrency(budget.invoicedTotal)}
         />
+      </div>
+
+      {/* Apply / save templates */}
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <form action={applyTemplate} className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-medium text-slate-600">
+            Apply budget template
+            <select
+              name="templateId"
+              required
+              defaultValue=""
+              className="mt-1 block min-w-[200px] rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm"
+            >
+              <option value="" disabled>
+                {budgetTemplates.length === 0
+                  ? "No templates yet"
+                  : "Select template…"}
+              </option>
+              {budgetTemplates.map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name} ({tmpl.lineCount} lines)
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            Mode
+            <select
+              name="mode"
+              defaultValue="replace"
+              className="mt-1 block rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm"
+            >
+              <option value="replace">Replace budget</option>
+              <option value="append">Add to budget</option>
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={budgetTemplates.length === 0}
+            className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-surface-900 hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Apply
+          </button>
+        </form>
+        <Link
+          href="/dashboard/budget-templates"
+          className="pb-2 text-xs font-medium text-brand-700 hover:text-brand-800"
+        >
+          Manage templates
+        </Link>
+        {budget.lineCount > 0 ? (
+          <form action={saveTemplate} className="ml-auto flex flex-wrap items-end gap-2">
+            <label className="text-xs font-medium text-slate-600">
+              Save this budget as template
+              <input
+                name="name"
+                required
+                placeholder="e.g. Site dig package"
+                className="mt-1 block min-w-[180px] rounded-lg border border-slate-200 px-2 py-2 text-sm"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Save template
+            </button>
+          </form>
+        ) : null}
       </div>
 
       {/* View switcher + primary actions */}

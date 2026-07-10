@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { CatalogItemsLibrary } from "@/components/catalog/catalog-items-library";
 import { getCatalogItems } from "@/lib/actions/catalog-items";
@@ -24,7 +25,15 @@ export default async function CatalogPage() {
     <div>
       <PageHeader
         title="Catalog"
-        description="Labor, equipment, materials, and other cost items. Use these to build job budgets and quotes."
+        description="Labor, equipment, materials, and other cost items. Use these to build job budgets."
+        action={
+          <Link
+            href="/dashboard/budget-templates"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Budget templates
+          </Link>
+        }
       />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

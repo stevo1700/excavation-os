@@ -516,3 +516,37 @@ model JobTask {
 
   @@index([jobId])
 }
+
+// ---------------------------------------------------------------------------
+// Budget templates — reusable estimate assemblies (JobTread-style).
+// Apply to a job to bulk-add budget lines.
+// ---------------------------------------------------------------------------
+
+model BudgetTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lines BudgetTemplateLine[]
+}
+
+model BudgetTemplateLine {
+  id            String  @id @default(cuid())
+  templateId    String
+  description   String
+  category      String  @default("OTHER")
+  catalogItemId String?
+  unit          String  @default("each")
+  qty           Decimal @default(1) @db.Decimal(12, 2)
+  unitCost      Decimal @default(0) @db.Decimal(12, 2)
+  markupPercent Decimal @default(30) @db.Decimal(8, 2)
+  unitPrice     Decimal @default(0) @db.Decimal(12, 2)
+  sortOrder     Int     @default(0)
+
+  template BudgetTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
