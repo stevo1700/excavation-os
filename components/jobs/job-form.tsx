@@ -13,6 +13,13 @@ export interface JobFormDefaults {
   value?: number;
   description?: string;
   customerId?: string;
+  budgetTemplateId?: string;
+}
+
+export interface BudgetTemplateOption {
+  id: string;
+  name: string;
+  lineCount: number;
 }
 
 /**
@@ -24,11 +31,13 @@ export function JobForm({
   defaults = {},
   submitLabel,
   cancelHref,
+  budgetTemplates = [],
 }: {
   action: (formData: FormData) => void | Promise<void>;
   defaults?: JobFormDefaults;
   submitLabel: string;
   cancelHref: string;
+  budgetTemplates?: BudgetTemplateOption[];
 }) {
   return (
     <form action={action} className="max-w-2xl space-y-5">
@@ -119,10 +128,25 @@ export function JobForm({
         />
       </Field>
 
+      <Field label="Budget template (optional)" htmlFor="budgetTemplateId">
+        <Select
+          id="budgetTemplateId"
+          name="budgetTemplateId"
+          defaultValue={defaults.budgetTemplateId ?? ""}
+        >
+          <option value="">None — start with empty budget</option>
+          {budgetTemplates.map((tmpl) => (
+            <option key={tmpl.id} value={tmpl.id}>
+              {tmpl.name} ({tmpl.lineCount} lines)
+            </option>
+          ))}
+        </Select>
+      </Field>
+
       <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-        Tip: start in <strong>Estimating</strong>, build the budget on the job
-        page, then move to <strong>Quoting</strong> and create a quote from the
-        budget.
+        Tip: pick a <strong>budget template</strong> to load labor/equipment/materials
+        right away. Status starts in <strong>Estimating</strong> — then create a
+        quote from the budget.
       </p>
 
       <div className="flex items-center gap-3 pt-1">

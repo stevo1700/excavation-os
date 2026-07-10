@@ -74,6 +74,7 @@ export function JobWorkspace({
   contracts,
   templates,
   tasks,
+  initialTab = "overview",
 }: {
   job: Job;
   customer: JobHubCustomer | null;
@@ -103,8 +104,9 @@ export function JobWorkspace({
   contracts: JobContractView[];
   templates: ContractTemplateView[];
   tasks: JobTaskView[];
+  initialTab?: TabKey;
 }) {
-  const [tab, setTab] = useState<TabKey>("overview");
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const c = jobColor(job.color);
   const openTasks = tasks.filter((t) => !t.done).length;
   const mapsQuery = encodeURIComponent(job.site || job.name);

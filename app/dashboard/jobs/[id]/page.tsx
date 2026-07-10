@@ -22,8 +22,10 @@ export const dynamic = "force-dynamic";
 
 export default async function JobDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { tab?: string };
 }) {
   const hub = await getJobHub(params.id);
   if (!hub) notFound();
@@ -95,6 +97,19 @@ export default async function JobDetailPage({
       </Link>
 
       <JobWorkspace
+        initialTab={
+          (["overview", "budget", "schedule", "map", "tasks", "documents"].includes(
+            searchParams?.tab ?? "",
+          )
+            ? searchParams!.tab
+            : "overview") as
+            | "overview"
+            | "budget"
+            | "schedule"
+            | "map"
+            | "tasks"
+            | "documents"
+        }
         job={job}
         customer={customer}
         financials={financials}

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { applyBudgetTemplate } from "@/lib/actions/budget-templates";
 import { logActionError } from "@/lib/log-error";
 import type { Job, JobColor, JobStatus } from "@/lib/types";
 import {
@@ -139,9 +140,27 @@ export async function createJob(formData: FormData): Promise<void> {
   if (!data.client) throw new Error("Client is required.");
 
   const job = await prisma.job.create({ data });
+
+  const budgetTemplateId = String(formData.get("budgetTemplateId") ?? "").trim();
+  if (budgetTemplateId) {
+    try {
+      await applyBudgetTemplate({
+        jobId: job.id,
+        templateId: budgetTemplateId,
+        mode: "replace",
+      });
+    } catch (error) {
+      logActionError("createJob.applyBudgetTemplate", error);
+    }
+  }
+
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/jobs/${job.id}`);
+  redirect(
+    budgetTemplateId
+      ? `/dashboard/jobs/${job.id}?tab=budget`
+      : `/dashboard/jobs/${job.id}`,
+  );
 }
 
 /** Modal-friendly create — returns the new job id (no redirect). */
@@ -152,6 +171,18 @@ export async function createJobFromModal(formData: FormData): Promise<string> {
 
   try {
     const job = await prisma.job.create({ data });
+    const budgetTemplateId = String(formData.get("budgetTemplateId") ?? "").trim();
+    if (budgetTemplateId) {
+      try {
+        await applyBudgetTemplate({
+          jobId: job.id,
+          templateId: budgetTemplateId,
+          mode: "replace",
+        });
+      } catch (error) {
+        logActionError("createJobFromModal.applyBudgetTemplate", error);
+      }
+    }
     revalidatePath("/dashboard/jobs");
     revalidatePath("/dashboard");
     return job.id;

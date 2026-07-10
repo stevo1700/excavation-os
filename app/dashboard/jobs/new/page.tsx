@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { JobForm } from "@/components/jobs/job-form";
 import { createJob } from "@/lib/actions/jobs";
 import { getCustomer } from "@/lib/actions/customers";
+import { getBudgetTemplates } from "@/lib/actions/budget-templates";
 
 export const metadata = { title: "New Job" };
 export const dynamic = "force-dynamic";
@@ -29,6 +30,8 @@ export default async function NewJobPage({
     }
   }
 
+  const budgetTemplates = await getBudgetTemplates(true);
+
   return (
     <div>
       <PageHeader
@@ -43,6 +46,11 @@ export default async function NewJobPage({
       <JobForm
         action={createJob}
         defaults={defaults}
+        budgetTemplates={budgetTemplates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          lineCount: t.lineCount,
+        }))}
         submitLabel="Create job"
         cancelHref={
           customerId

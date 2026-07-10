@@ -14,11 +14,12 @@ import { NewJobModal } from "@/components/dashboard/new-job-modal";
 import { AddEquipmentModal } from "@/components/dashboard/add-equipment-modal";
 import { AddCrewModal } from "@/components/dashboard/add-crew-modal";
 import { getDashboardData } from "@/lib/actions/dashboard";
+import { getBudgetTemplates } from "@/lib/actions/budget-templates";
 import { formatCurrency, formatDate, jobColor } from "@/lib/utils";
 
 export default async function DashboardOverviewPage() {
-  const { jobs, equipment, crew, activity, kpis, weeklyRevenue } =
-    await getDashboardData();
+  const [{ jobs, equipment, crew, activity, kpis, weeklyRevenue }, budgetTemplates] =
+    await Promise.all([getDashboardData(), getBudgetTemplates(true)]);
 
   const activeJobs = jobs.filter((job) => job.status === "in_progress");
 
@@ -55,7 +56,13 @@ export default async function DashboardOverviewPage() {
         <div className="flex flex-wrap items-center gap-2">
           <AddCrewModal />
           <AddEquipmentModal />
-          <NewJobModal />
+          <NewJobModal
+            budgetTemplates={budgetTemplates.map((t) => ({
+              id: t.id,
+              name: t.name,
+              lineCount: t.lineCount,
+            }))}
+          />
         </div>
       </div>
 

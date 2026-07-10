@@ -15,8 +15,18 @@ import {
 import { JOB_STATUS_OPTIONS } from "@/lib/job-status";
 import { createJobFromModal } from "@/lib/actions/jobs";
 
+export interface NewJobTemplateOption {
+  id: string;
+  name: string;
+  lineCount: number;
+}
+
 /** New job modal — persists to the database. */
-export function NewJobModal() {
+export function NewJobModal({
+  budgetTemplates = [],
+}: {
+  budgetTemplates?: NewJobTemplateOption[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +51,7 @@ export function NewJobModal() {
         open={open}
         onClose={close}
         title="New job"
-        description="Create a job. Start in Estimating to build a budget, then quote from it."
+        description="Create a job. Optionally load a budget template, then quote from the budget."
         footer={
           <>
             <SecondaryButton type="button" onClick={close} disabled={pending}>
@@ -58,11 +68,18 @@ export function NewJobModal() {
           className="space-y-4"
           action={(formData) => {
             setError(null);
+            const templateId = String(
+              formData.get("budgetTemplateId") ?? "",
+            ).trim();
             startTransition(async () => {
               try {
                 const id = await createJobFromModal(formData);
                 close();
-                router.push(`/dashboard/jobs/${id}`);
+                router.push(
+                  templateId
+                    ? `/dashboard/jobs/${id}?tab=budget`
+                    : `/dashboard/jobs/${id}`,
+                );
                 router.refresh();
               } catch (e) {
                 setError(
@@ -130,6 +147,21 @@ export function NewJobModal() {
               min={0}
               placeholder="248000"
             />
+          </Field>
+
+          <Field label="Budget template (optional)" htmlFor="modal-job-template">
+            <Select
+              id="modal-job-template"
+              name="budgetTemplateId"
+              defaultValue=""
+            >
+              <option value="">None — empty budget</option>
+              {budgetTemplates.map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name} ({tmpl.lineCount} lines)
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <Field label="Description" htmlFor="modal-job-desc">
