@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
-/** Quotes/invoices live on jobs. Company feed is under Documents. */
-export default function RedirectPage() {
+export const dynamic = "force-dynamic";
+
+/** Invoices live on jobs. Company feed is under Documents. */
+export default function InvoicesIndexRedirect() {
   redirect("/dashboard/documents");
 }
