@@ -1,5 +1,4 @@
-import { Bell, Search } from "lucide-react";
-import { UserButton } from "@clerk/nextjs";
+import { Bell, Search, User } from "lucide-react";
 import { MobileSidebar } from "@/components/layout/sidebar";
 
 export function Topbar({ title }: { title: string }) {
@@ -23,13 +22,9 @@ export function Topbar({ title }: { title: string }) {
           <Bell className="h-4 w-4" />
           <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-brand-500" />
         </button>
-        <UserButton
-          appearance={{
-            elements: {
-              avatarBox: "h-8 w-8",
-            },
-          }}
-        />
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-surface-900">
+          <User className="h-4 w-4" />
+        </div>
       </div>
     </header>
   );

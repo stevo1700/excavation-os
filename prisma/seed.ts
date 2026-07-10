@@ -1,13 +1,18 @@
 // Seeds the database with the same demo data the UI ships with (lib/data.ts and
-// lib/mock-reports.ts), mapped onto the (reconciled) Prisma schema. The live DB
-// is already populated, so this is primarily a reference / local-bootstrap tool.
+// lib/mock-reports.ts), mapped onto the Prisma schema. Running `prisma db seed`
+// gives a real database whose contents match exactly what the dashboard shows.
 //
 // Re-running is safe: the script clears the relevant tables first.
 
-import { Prisma, PrismaClient } from "@prisma/client";
+import {
+  PrismaClient,
+  UserRole,
+  JobStatus,
+  EquipmentStatus,
+  CrewStatus,
+} from "@prisma/client";
 import { jobs, equipment, crew, activity } from "../lib/data";
 import { dailyReports } from "../lib/mock-reports";
-import { generateQrSvg, qrUrlForTag } from "../lib/qr";
 import type {
   CrewRole,
   CrewStatus as MockCrewStatus,
@@ -17,50 +22,34 @@ import type {
 
 const prisma = new PrismaClient();
 
-// --- mappings: UI string unions -> DB text values -----------------------------
+// --- enum mappings: UI string unions -> Prisma enums --------------------------
 
-const jobStatusMap: Record<MockJobStatus, string> = {
-  scheduled: "PENDING",
-  in_progress: "ACTIVE",
-  on_hold: "ON_HOLD",
-  completed: "COMPLETE",
+const jobStatusMap: Record<MockJobStatus, JobStatus> = {
+  scheduled: JobStatus.SCHEDULED,
+  in_progress: JobStatus.IN_PROGRESS,
+  on_hold: JobStatus.ON_HOLD,
+  completed: JobStatus.COMPLETED,
 };
 
-const equipmentStatusMap: Record<MockEquipmentStatus, string> = {
-  available: "AVAILABLE",
-  in_use: "IN_USE",
-  maintenance: "MAINTENANCE",
+const equipmentStatusMap: Record<MockEquipmentStatus, EquipmentStatus> = {
+  available: EquipmentStatus.AVAILABLE,
+  in_use: EquipmentStatus.IN_USE,
+  maintenance: EquipmentStatus.MAINTENANCE,
 };
 
-const crewRoleToUserRole: Record<CrewRole, string> = {
-  foreman: "FOREMAN",
-  operator: "OPERATOR",
-  laborer: "LABOURER",
-  surveyor: "OPERATOR",
-  mechanic: "OPERATOR",
+const crewStatusMap: Record<MockCrewStatus, CrewStatus> = {
+  on_site: CrewStatus.ON_SITE,
+  available: CrewStatus.AVAILABLE,
+  off: CrewStatus.OFF,
 };
 
-// Local totals math, mirroring lib/finance.ts's computeTotals — duplicated
-// rather than imported because lib/finance.ts pulls in "@/lib/types" (a path
-// alias ts-node can't resolve here without extra config; this file otherwise
-// only uses plain relative imports).
-function round(value: number, decimals: number): number {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
-function computeTotals(
-  items: { quantity: number; unitPrice: number }[],
-  taxRatePercent: number,
-) {
-  const subtotal = round(
-    items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-    2,
-  );
-  const taxRate = round(taxRatePercent / 100, 4);
-  const taxAmount = round(subtotal * taxRate, 2);
-  const total = round(subtotal + taxAmount, 2);
-  return { subtotal, taxRate, taxAmount, total };
-}
+const crewRoleToUserRole: Record<CrewRole, UserRole> = {
+  foreman: UserRole.FOREMAN,
+  operator: UserRole.OPERATOR,
+  laborer: UserRole.LABOURER,
+  surveyor: UserRole.OPERATOR,
+  mechanic: UserRole.OPERATOR,
+};
 
 // --- helpers ------------------------------------------------------------------
 
@@ -76,8 +65,17 @@ function emailForName(name: string): string {
   return `${slug}@excavationos.test`;
 }
 
-function isActive(status: MockCrewStatus): boolean {
-  return status !== "off";
+// Estimated monthly engine hours, derived from current status (the mock data
+// only tracks lifetime hours, so this is a reasonable stand-in).
+function monthlyHours(status: MockEquipmentStatus): number {
+  switch (status) {
+    case "in_use":
+      return 160;
+    case "maintenance":
+      return 20;
+    default:
+      return 55;
+  }
 }
 
 // Split a machine name like "CAT 320 Excavator" into make + model.
@@ -89,9 +87,7 @@ function makeAndModel(name: string): { make: string; model: string } {
 async function main() {
   console.log("Seeding database…");
 
-  // Clear existing rows in FK-safe order. Deleting Job cascades away any
-  // Quote/Invoice/Payment/QuoteLineItem/InvoiceLineItem rows that reference
-  // it, so those don't need explicit deletes here.
+  // Clear existing rows in FK-safe order.
   await prisma.activityEvent.deleteMany();
   await prisma.note.deleteMany();
   await prisma.dailyReport.deleteMany();
@@ -99,11 +95,9 @@ async function main() {
   await prisma.equipment.deleteMany();
   await prisma.job.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.customer.deleteMany();
-  await prisma.catalogItem.deleteMany();
-  await prisma.telematicsConnection.deleteMany();
 
-  // Map a person's display name to their User id and name.
+  // Map a person's display name to their User id, so jobs/notes/reports can be
+  // linked by the names used throughout the mock data.
   const userIdByName = new Map<string, string>();
   for (const member of crew) {
     userIdByName.set(member.name, userIdForCrew(member.id));
@@ -117,7 +111,7 @@ async function main() {
         clerkId: "seed_admin",
         name: "Site Admin",
         email: "admin@excavationos.test",
-        role: "ADMIN",
+        role: UserRole.ADMIN,
       },
       ...crew.map((member) => ({
         id: userIdForCrew(member.id),
@@ -136,50 +130,45 @@ async function main() {
       id: job.id,
       name: job.name,
       client: job.client,
-      address: job.site,
+      site: job.site,
       status: jobStatusMap[job.status],
       startDate: new Date(job.startDate),
-      endDate: new Date(job.dueDate),
-      contractValue: job.value,
+      estCompletion: new Date(job.dueDate),
+      value: job.value,
       description: job.description,
+      color: job.color,
+      foremanId: userIdByName.get(job.foreman) ?? null,
     })),
   });
   console.log(`  ✓ ${jobs.length} jobs`);
 
-  // Equipment. Asset tags come straight from lib/data.ts (the single source
-  // of truth, also used as the API's mock fallback); each machine's QR code
-  // is generated here from its tag's canonical scan URL.
-  const equipmentData = await Promise.all(
-    equipment.map(async (machine) => {
+  // Equipment.
+  await prisma.equipment.createMany({
+    data: equipment.map((machine) => {
       const { make, model } = makeAndModel(machine.name);
-      const qrUrl = qrUrlForTag(machine.assetTag);
-      const qrSvg = await generateQrSvg(qrUrl);
       return {
         id: machine.id,
         name: machine.name,
-        type: machine.category,
+        category: machine.category,
         make,
         model,
         status: equipmentStatusMap[machine.status],
+        hoursLogged: monthlyHours(machine.status),
         jobId: machine.assignedJob,
-        assetTag: machine.assetTag,
-        qrUrl,
-        qrSvg,
       };
     }),
-  );
-  await prisma.equipment.createMany({ data: equipmentData });
+  });
   console.log(`  ✓ ${equipment.length} equipment`);
 
-  // Crew members.
+  // Crew members (linked to their User account).
   await prisma.crewMember.createMany({
     data: crew.map((member) => ({
       id: member.id,
+      userId: userIdForCrew(member.id),
       name: member.name,
       role: member.role,
       phone: member.phone,
-      certifications: member.certifications,
-      active: isActive(member.status),
+      status: crewStatusMap[member.status],
       jobId: member.assignedJob,
     })),
   });
@@ -190,12 +179,11 @@ async function main() {
     data: dailyReports.map((report) => ({
       id: report.id,
       jobId: report.jobId,
-      authorId: userIdByName.get(report.submittedBy) ?? "usr_admin",
+      submittedById: userIdByName.get(report.submittedBy) ?? "usr_admin",
       date: new Date(report.date),
       weather: report.weather,
-      workPerformed: report.summary,
+      summary: report.summary,
       hoursWorked: report.hoursWorked,
-      crewCount: report.crewCount,
     })),
   });
   console.log(`  ✓ ${dailyReports.length} daily reports`);
@@ -206,8 +194,7 @@ async function main() {
       id: note.id,
       jobId: job.id,
       authorId: userIdByName.get(note.author) ?? "usr_admin",
-      authorName: note.author,
-      content: note.body,
+      body: note.body,
       createdAt: new Date(note.date),
     })),
   );
@@ -225,285 +212,6 @@ async function main() {
     })),
   });
   console.log(`  ✓ ${activity.length} activity events`);
-
-  // --- Catalog: customers, item library, quotes, invoice + payment -----------
-
-  const customers = await Promise.all(
-    [
-      {
-        id: "cust_hollis",
-        name: "Hollis Development",
-        contactName: "Dana Hollis",
-        company: "Hollis Development LLC",
-        email: "dana@hollisdevelopment.example",
-        phone: "555-0142",
-        stage: "Active",
-      },
-      {
-        id: "cust_county",
-        name: "County Public Works",
-        contactName: "Marcus Webb",
-        company: "County Public Works Dept.",
-        email: "mwebb@county.example.gov",
-        phone: "555-0188",
-        stage: "Active",
-      },
-      {
-        id: "cust_meridian",
-        name: "Meridian Real Estate",
-        contactName: "Priya Anand",
-        company: "Meridian Real Estate Group",
-        email: "priya@meridianre.example",
-        phone: "555-0210",
-        stage: "Lead",
-      },
-    ].map((data) => prisma.customer.create({ data })),
-  );
-  console.log(`  ✓ ${customers.length} customers`);
-
-  const catalogItemsData = [
-    {
-      code: "EX-HOUR",
-      name: "Excavator operating hour",
-      unit: "hr",
-      unitPrice: 185,
-      category: "EQUIPMENT",
-    },
-    {
-      code: "DZ-HOUR",
-      name: "Dozer operating hour",
-      unit: "hr",
-      unitPrice: 165,
-      category: "EQUIPMENT",
-    },
-    {
-      code: "LD-HOUR",
-      name: "Wheel loader operating hour",
-      unit: "hr",
-      unitPrice: 145,
-      category: "EQUIPMENT",
-    },
-    {
-      code: "TRUCK-HOUR",
-      name: "Dump truck haul, hourly",
-      unit: "hr",
-      unitPrice: 120,
-      category: "EQUIPMENT",
-    },
-    {
-      code: "DEMO-DAY",
-      name: "Demolition crew day rate",
-      unit: "day",
-      unitPrice: 1200,
-      category: "LABOR",
-    },
-    {
-      code: "LABOR-HOUR",
-      name: "General laborer",
-      unit: "hr",
-      unitPrice: 65,
-      category: "LABOR",
-    },
-    {
-      code: "OP-HOUR",
-      name: "Equipment operator",
-      unit: "hr",
-      unitPrice: 95,
-      category: "LABOR",
-    },
-    {
-      code: "FILL-TON",
-      name: "Structural fill material",
-      unit: "ton",
-      unitPrice: 28,
-      category: "MATERIAL",
-    },
-    {
-      code: "GRAVEL-TON",
-      name: "3/4in gravel",
-      unit: "ton",
-      unitPrice: 22,
-      category: "MATERIAL",
-    },
-    {
-      code: "SUB-SURVEY",
-      name: "Land survey subcontract",
-      unit: "each",
-      unitPrice: 2200,
-      category: "SUBCONTRACT",
-    },
-  ] as const;
-  const catalogItems = await Promise.all(
-    catalogItemsData.map((data) => prisma.catalogItem.create({ data })),
-  );
-  const catalogItemByCode = new Map(catalogItems.map((c) => [c.code, c]));
-  console.log(`  ✓ ${catalogItems.length} catalog items`);
-
-  // Quote 1: DRAFT, Cedar Heights septic excavation (JOB-1046).
-  const exHour = catalogItemByCode.get("EX-HOUR")!;
-  const laborHour = catalogItemByCode.get("LABOR-HOUR")!;
-  const draftItems = [
-    {
-      catalogItem: exHour,
-      description: exHour.name,
-      quantity: 24,
-      unitPrice: exHour.unitPrice.toNumber(),
-    },
-    {
-      catalogItem: laborHour,
-      description: laborHour.name,
-      quantity: 40,
-      unitPrice: laborHour.unitPrice.toNumber(),
-    },
-  ];
-  const draftTotals = computeTotals(draftItems, 8.25);
-  const draftQuote = await prisma.quote.create({
-    data: {
-      title: "Cedar Heights septic excavation",
-      jobId: "JOB-1046",
-      customerId: customers[1].id,
-      quoteNumber: "QUO-2026-0001",
-      status: "DRAFT",
-      lineItems: draftItems.map((i) => ({
-        description: i.description,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice,
-        lineTotal: round(i.quantity * i.unitPrice, 2),
-      })),
-      subtotal: draftTotals.subtotal,
-      taxRate: draftTotals.taxRate,
-      taxAmount: draftTotals.taxAmount,
-      total: draftTotals.total,
-      validUntil: new Date("2026-08-01"),
-      lineItemRows: {
-        create: draftItems.map((i, index) => ({
-          catalogItemId: i.catalogItem.id,
-          description: i.description,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          amount: round(i.quantity * i.unitPrice, 2),
-          sortOrder: index,
-        })),
-      },
-    },
-  });
-
-  // Quote 2: APPROVED, Riverside foundation dig (JOB-1042) — will be converted.
-  const dzHour = catalogItemByCode.get("DZ-HOUR")!;
-  const fillTon = catalogItemByCode.get("FILL-TON")!;
-  const opHour = catalogItemByCode.get("OP-HOUR")!;
-  const approvedItems = [
-    {
-      catalogItem: exHour,
-      description: exHour.name,
-      quantity: 60,
-      unitPrice: exHour.unitPrice.toNumber(),
-    },
-    {
-      catalogItem: dzHour,
-      description: dzHour.name,
-      quantity: 20,
-      unitPrice: dzHour.unitPrice.toNumber(),
-    },
-    {
-      catalogItem: fillTon,
-      description: fillTon.name,
-      quantity: 150,
-      unitPrice: fillTon.unitPrice.toNumber(),
-    },
-    {
-      catalogItem: opHour,
-      description: opHour.name,
-      quantity: 60,
-      unitPrice: opHour.unitPrice.toNumber(),
-    },
-  ];
-  const approvedTotals = computeTotals(approvedItems, 8.25);
-  const approvedQuote = await prisma.quote.create({
-    data: {
-      title: "Phase 1 excavation",
-      jobId: "JOB-1042",
-      customerId: customers[0].id,
-      quoteNumber: "QUO-2026-0002",
-      status: "APPROVED",
-      lineItems: approvedItems.map((i) => ({
-        description: i.description,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice,
-        lineTotal: round(i.quantity * i.unitPrice, 2),
-      })),
-      subtotal: approvedTotals.subtotal,
-      taxRate: approvedTotals.taxRate,
-      taxAmount: approvedTotals.taxAmount,
-      total: approvedTotals.total,
-      validUntil: new Date("2026-07-31"),
-      lineItemRows: {
-        create: approvedItems.map((i, index) => ({
-          catalogItemId: i.catalogItem.id,
-          description: i.description,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          amount: round(i.quantity * i.unitPrice, 2),
-          sortOrder: index,
-        })),
-      },
-    },
-  });
-  console.log("  ✓ 2 quotes (1 draft, 1 approved)");
-
-  // Invoice converted from the approved quote, with one partial payment.
-  const invoice = await prisma.invoice.create({
-    data: {
-      jobId: approvedQuote.jobId,
-      customerId: approvedQuote.customerId,
-      quoteId: approvedQuote.id,
-      invoiceNumber: "INV-2026-0001",
-      status: "PARTIAL",
-      lineItems: approvedQuote.lineItems as Prisma.InputJsonValue,
-      subtotal: approvedQuote.subtotal,
-      taxRate: approvedQuote.taxRate,
-      taxAmount: approvedQuote.taxAmount,
-      total: approvedQuote.total,
-      amountPaid: round(approvedTotals.total * 0.4, 2),
-      dueDate: new Date("2026-08-15"),
-      lineItemRows: {
-        create: approvedItems.map((i, index) => ({
-          catalogItemId: i.catalogItem.id,
-          description: i.description,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          amount: round(i.quantity * i.unitPrice, 2),
-          sortOrder: index,
-        })),
-      },
-      payments: {
-        create: [
-          {
-            amount: round(approvedTotals.total * 0.4, 2),
-            method: "TRANSFER",
-            reference: "WIRE-88213",
-            notes: "Deposit on Phase 1 excavation.",
-          },
-        ],
-      },
-    },
-  });
-  console.log(
-    "  ✓ 1 invoice (partial payment) converted from the approved quote",
-  );
-
-  void draftQuote;
-  void invoice;
-
-  // --- Telematics: one disconnected connection per OEM ------------------------
-
-  await prisma.telematicsConnection.createMany({
-    data: (["KOMATSU", "CASE", "BOBCAT"] as const).map((oem) => ({
-      oem,
-      status: "DISCONNECTED",
-    })),
-  });
-  console.log("  ✓ 3 telematics connections (disconnected)");
 
   console.log("Seed complete.");
 }
