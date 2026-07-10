@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 import { getJob } from "@/lib/actions/jobs";
 import { getJobAssignments, type JobAssignmentView } from "@/lib/actions/assignments";
+import { getJobBudget, type JobBudgetSnapshot } from "@/lib/actions/budget";
 import type { Job } from "@/lib/types";
 
 export interface JobFinancialSnapshot {
@@ -34,6 +35,7 @@ export interface JobHubData {
   assignments: JobAssignmentView[];
   availableCrew: { id: string; name: string; role: string }[];
   availableEquipment: { id: string; name: string; assetTag: string }[];
+  budget: JobBudgetSnapshot;
 }
 
 function money(value: { toNumber(): number } | number | null | undefined): number {
@@ -55,6 +57,7 @@ export async function getJobHub(jobId: string): Promise<JobHubData | null> {
       timesheets,
       reportsCount,
       assignments,
+      budget,
       crewPool,
       equipPool,
     ] = await Promise.all([
@@ -67,6 +70,7 @@ export async function getJobHub(jobId: string): Promise<JobHubData | null> {
       prisma.timesheetEntry.findMany({ where: { jobId } }),
       prisma.dailyReport.count({ where: { jobId } }),
       getJobAssignments(jobId),
+      getJobBudget(jobId),
       prisma.crewMember.findMany({
         where: { active: true },
         orderBy: { name: "asc" },
@@ -145,6 +149,7 @@ export async function getJobHub(jobId: string): Promise<JobHubData | null> {
       availableCrew: crewPool
         .filter((c) => !activeCrewIds.has(c.id))
         .map((c) => ({ id: c.id, name: c.name, role: c.role })),
+      budget,
       availableEquipment: equipPool
         .filter((e) => !activeEquipIds.has(e.id))
         .map((e) => ({
@@ -174,6 +179,15 @@ export async function getJobHub(jobId: string): Promise<JobHubData | null> {
       assignments: [],
       availableCrew: [],
       availableEquipment: [],
+      budget: {
+        lines: [],
+        byCategory: [],
+        budgetTotal: 0,
+        actualTotal: 0,
+        variance: 0,
+        percentUsed: null,
+        lineCount: 0,
+      },
     };
   }
 }

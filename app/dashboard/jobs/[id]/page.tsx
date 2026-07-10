@@ -13,6 +13,7 @@ import { FinanceStatusBadge } from "@/components/finance/status-badge";
 import { JobAssignmentsPanel } from "@/components/jobs/job-assignments-panel";
 import { JobDetailTabs } from "@/components/jobs/job-detail-tabs";
 import { JobFinancialStrip } from "@/components/jobs/job-financial-strip";
+import { JobBudgetPanel } from "@/components/jobs/job-budget-panel";
 import { PortalShare } from "@/components/jobs/portal-share";
 import { getJobHub } from "@/lib/actions/job-hub";
 import { getCrew } from "@/lib/actions/crew";
@@ -36,7 +37,7 @@ export default async function JobDetailPage({
   const hub = await getJobHub(params.id);
   if (!hub) notFound();
 
-  const { job, customer, financials, assignments, availableCrew, availableEquipment } =
+  const { job, customer, financials, assignments, availableCrew, availableEquipment, budget } =
     hub;
 
   const [crew, equipment, reports, timesheets, quotes, invoices] =
@@ -151,6 +152,21 @@ export default async function JobDetailPage({
           assignments={assignments}
           availableCrew={availableCrew}
           availableEquipment={availableEquipment}
+        />
+      </div>
+
+      <div className="mb-8">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Budget vs actual
+        </h3>
+        <JobBudgetPanel
+          jobId={job.id}
+          budget={budget}
+          quoteOptions={quotes.map((q) => ({
+            id: q.id,
+            quoteNumber: q.quoteNumber,
+            status: q.status,
+          }))}
         />
       </div>
 

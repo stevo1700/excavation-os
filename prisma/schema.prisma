@@ -51,6 +51,7 @@ model Job {
   equipment        Equipment[]
   crew             CrewMember[]
   assignments      JobAssignment[]
+  budgetLines      JobBudgetLine[]
   dailyReports     DailyReport[]
   notes            Note[]
   activity         ActivityEvent[]
@@ -58,6 +59,39 @@ model Job {
   portalTokens     ClientPortalToken[]
   quotes           Quote[]
   invoices         Invoice[]
+}
+
+// ---------------------------------------------------------------------------
+// Budget vs actual — line-level estimate vs cost on a job.
+// Budget can be entered manually or imported from an approved quote.
+// Actual is updated as costs come in (manual for now; later AP/timesheets).
+// ---------------------------------------------------------------------------
+
+model JobBudgetLine {
+  id              String   @id @default(cuid())
+  jobId           String
+  description     String
+  // LABOR / EQUIPMENT / MATERIAL / SUBCONTRACT / OTHER
+  category        String   @default("OTHER")
+  catalogItemId   String?
+  unit            String   @default("each")
+  budgetQty       Decimal  @default(1) @db.Decimal(12, 2)
+  budgetUnitPrice Decimal  @default(0) @db.Decimal(12, 2)
+  budgetAmount    Decimal  @default(0) @db.Decimal(12, 2)
+  actualQty       Decimal  @default(0) @db.Decimal(12, 2)
+  actualUnitPrice Decimal  @default(0) @db.Decimal(12, 2)
+  actualAmount    Decimal  @default(0) @db.Decimal(12, 2)
+  notes           String?
+  sortOrder       Int      @default(0)
+  // Optional source quote line (for re-import tracking)
+  sourceQuoteId   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([category])
 }
 
 // ---------------------------------------------------------------------------
