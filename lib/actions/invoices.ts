@@ -190,7 +190,7 @@ export async function createInvoice(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/dashboard/invoices");
-  redirect("/dashboard/invoices");
+  redirect("/dashboard/documents");
 }
 
 /** Copy a quote's line items into a new draft invoice, then open it. */

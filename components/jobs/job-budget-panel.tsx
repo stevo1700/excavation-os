@@ -1,3 +1,6 @@
+"use client";
+
+import { Fragment, useMemo, useState } from "react";
 import {
   addBudgetLineForm,
   createInvoiceFromBudgetForm,
@@ -11,8 +14,16 @@ import {
 import type { CatalogItemRecord } from "@/lib/actions/catalog-items";
 import { CATALOG_CATEGORIES } from "@/lib/catalog-categories";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { formatCurrency, humanize } from "@/lib/utils";
+import { cn, formatCurrency, humanize } from "@/lib/utils";
 
+type BudgetView = "estimate" | "costing" | "billing";
+
+/**
+ * JobTread-style budget ledger:
+ * - Estimate view: build qty × unit cost
+ * - Costing view: budgeted vs actual + variance
+ * - Billing view: quoted / invoiced vs budget
+ */
 export function JobBudgetPanel({
   jobId,
   budget,
@@ -24,23 +35,43 @@ export function JobBudgetPanel({
   catalogItems: CatalogItemRecord[];
   quoteOptions: { id: string; quoteNumber: string; status: string }[];
 }) {
+  const [view, setView] = useState<BudgetView>("estimate");
   const addLine = addBudgetLineForm.bind(null, jobId);
   const importQuote = importBudgetFromQuoteForm.bind(null, jobId);
   const makeQuote = createQuoteFromBudgetForm.bind(null, jobId);
   const makeInvoice = createInvoiceFromBudgetForm.bind(null, jobId);
+
   const over = budget.variance > 0;
   const under = budget.variance < 0;
 
+  const linesByCategory = useMemo(() => {
+    const map = new Map<string, typeof budget.lines>();
+    for (const line of budget.lines) {
+      const list = map.get(line.category) ?? [];
+      list.push(line);
+      map.set(line.category, list);
+    }
+    return Array.from(map.entries());
+  }, [budget.lines]);
+
+  const views: { key: BudgetView; label: string }[] = [
+    { key: "estimate", label: "Estimate" },
+    { key: "costing", label: "Job costing" },
+    { key: "billing", label: "Billing" },
+  ];
+
   return (
     <div className="space-y-4">
+      {/* Totals strip — JobTread costing columns */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <SummaryCard label="Budget" value={formatCurrency(budget.budgetTotal)} />
-        <SummaryCard label="Quoted" value={formatCurrency(budget.quotedTotal)} />
         <SummaryCard
-          label="Invoiced"
-          value={formatCurrency(budget.invoicedTotal)}
+          label="Budgeted cost"
+          value={formatCurrency(budget.budgetTotal)}
         />
-        <SummaryCard label="Actual" value={formatCurrency(budget.actualTotal)} />
+        <SummaryCard
+          label="Actual cost"
+          value={formatCurrency(budget.actualTotal)}
+        />
         <SummaryCard
           label="Variance"
           value={formatCurrency(budget.variance)}
@@ -48,7 +79,15 @@ export function JobBudgetPanel({
           hint={over ? "over budget" : under ? "under budget" : "on target"}
         />
         <SummaryCard
-          label="% used"
+          label="Quoted"
+          value={formatCurrency(budget.quotedTotal)}
+        />
+        <SummaryCard
+          label="Invoiced"
+          value={formatCurrency(budget.invoicedTotal)}
+        />
+        <SummaryCard
+          label="% of budget used"
           value={
             budget.percentUsed == null
               ? "—"
@@ -64,273 +103,321 @@ export function JobBudgetPanel({
         />
       </div>
 
-      {budget.byCategory.length > 0 ? (
-        <Card>
-          <CardHeader
-            title="By category"
-            description="Estimate vs actual cost rollup"
-          />
-          <CardBody className="overflow-x-auto p-0">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-2.5 font-medium">Category</th>
-                  <th className="px-5 py-2.5 font-medium text-right">Budget</th>
-                  <th className="px-5 py-2.5 font-medium text-right">Actual</th>
-                  <th className="px-5 py-2.5 font-medium text-right">Variance</th>
-                  <th className="px-5 py-2.5 font-medium text-right">% used</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {budget.byCategory.map((row) => (
-                  <tr key={row.category}>
-                    <td className="px-5 py-2.5 font-medium text-slate-900">
-                      {humanize(row.category.toLowerCase())}
-                    </td>
-                    <td className="px-5 py-2.5 text-right tabular-nums text-slate-700">
-                      {formatCurrency(row.budgetAmount)}
-                    </td>
-                    <td className="px-5 py-2.5 text-right tabular-nums text-slate-700">
-                      {formatCurrency(row.actualAmount)}
-                    </td>
-                    <td
-                      className={`px-5 py-2.5 text-right tabular-nums font-medium ${
-                        row.variance > 0
-                          ? "text-rose-600"
-                          : row.variance < 0
-                            ? "text-emerald-600"
-                            : "text-slate-600"
-                      }`}
-                    >
-                      {formatCurrency(row.variance)}
-                    </td>
-                    <td className="px-5 py-2.5 text-right tabular-nums text-slate-500">
-                      {row.percentUsed == null
-                        ? "—"
-                        : `${row.percentUsed.toFixed(0)}%`}
-                    </td>
-                  </tr>
+      {/* View switcher + primary actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          {views.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => setView(v.key)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-semibold transition",
+                view === v.key
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800",
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {budget.lineCount > 0 ? (
+            <>
+              <form action={makeQuote}>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-surface-900 hover:bg-brand-400"
+                >
+                  Create quote from budget
+                </button>
+              </form>
+              <form action={makeInvoice}>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Create invoice from budget
+                </button>
+              </form>
+            </>
+          ) : null}
+          {quoteOptions.length > 0 ? (
+            <form action={importQuote} className="flex flex-wrap items-end gap-2">
+              <select
+                name="quoteId"
+                required
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  Import quote…
+                </option>
+                {quoteOptions.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.quoteNumber} ({q.status})
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </CardBody>
-        </Card>
-      ) : null}
+              </select>
+              <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                <input type="checkbox" name="force" value="true" />
+                Allow draft
+              </label>
+              <button
+                type="submit"
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Import
+              </button>
+            </form>
+          ) : null}
+        </div>
+      </div>
 
       <Card>
         <CardHeader
-          title="Budget lines"
-          description={
-            budget.lineCount === 0
-              ? "Catalog → budget lines → quote → invoice"
-              : `${budget.lineCount} line${budget.lineCount === 1 ? "" : "s"} · edit estimate or actuals`
+          title={
+            view === "estimate"
+              ? "Estimate lines"
+              : view === "costing"
+                ? "Job costing"
+                : "Billing vs budget"
           }
-          action={
-            <div className="flex flex-wrap items-center gap-2">
-              {budget.lineCount > 0 ? (
-                <>
-                  <form action={makeQuote}>
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-surface-900 hover:bg-brand-400"
-                    >
-                      Create quote from budget
-                    </button>
-                  </form>
-                  <form action={makeInvoice}>
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Create invoice from budget
-                    </button>
-                  </form>
-                </>
-              ) : null}
-              {quoteOptions.length > 0 ? (
-                <form
-                  action={importQuote}
-                  className="flex flex-wrap items-end gap-2"
-                >
-                  <label className="text-xs font-medium text-slate-600">
-                    Import quote
-                    <select
-                      name="quoteId"
-                      required
-                      className="mt-1 block rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Select…
-                      </option>
-                      {quoteOptions.map((q) => (
-                        <option key={q.id} value={q.id}>
-                          {q.quoteNumber} ({q.status})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-1.5 pb-1.5 text-xs text-slate-500">
-                    <input type="checkbox" name="force" value="true" />
-                    Allow non-approved
-                  </label>
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Import
-                  </button>
-                </form>
-              ) : null}
-            </div>
+          description={
+            view === "estimate"
+              ? "Build the job budget from catalog items (JobTread budget-first)"
+              : view === "costing"
+                ? "Budgeted cost · actual cost · variance (over = red, under = green)"
+                : "What you’ve quoted and invoiced against each budget line"
           }
         />
         <CardBody className="space-y-5">
           {budget.lines.length === 0 ? (
             <p className="text-sm text-slate-400">
-              Pick a catalog item below or type a custom line to start the
-              estimate.
+              No budget lines yet. Add from the catalog below — then create a
+              quote when the estimate is ready.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="pb-2 pr-3 font-medium">Description</th>
-                    <th className="pb-2 pr-3 font-medium">Cat</th>
-                    <th className="pb-2 pr-3 font-medium text-right">Estimate</th>
-                    <th className="pb-2 pr-3 font-medium text-right">Quoted</th>
-                    <th className="pb-2 pr-3 font-medium text-right">Invoiced</th>
-                    <th className="pb-2 pr-3 font-medium text-right">Actual</th>
-                    <th className="pb-2 pr-3 font-medium text-right">Var</th>
+                    <th className="pb-2 pr-3 font-medium">Cost item</th>
+                    <th className="pb-2 pr-3 font-medium">Type</th>
+                    {view === "estimate" ? (
+                      <>
+                        <th className="pb-2 pr-3 font-medium text-right">Qty</th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Unit cost
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Budgeted
+                        </th>
+                      </>
+                    ) : null}
+                    {view === "costing" ? (
+                      <>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Budgeted
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Actual
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Variance
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          % used
+                        </th>
+                      </>
+                    ) : null}
+                    {view === "billing" ? (
+                      <>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Budgeted
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Quoted
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Invoiced
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Left to bill
+                        </th>
+                      </>
+                    ) : null}
                     <th className="pb-2 font-medium" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {budget.lines.map((line) => {
-                    const updateEstimate = updateBudgetEstimateForm.bind(
-                      null,
-                      line.id,
-                    );
-                    const updateActual = updateBudgetActualForm.bind(
-                      null,
-                      line.id,
-                    );
-                    const remove = deleteBudgetLineForm.bind(null, line.id);
-                    return (
-                      <tr key={line.id} className="align-top">
-                        <td className="py-3 pr-3">
-                          <p className="font-medium text-slate-900">
-                            {line.description}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {line.unit}
-                            {line.catalogItemId ? " · from catalog" : ""}
-                          </p>
-                        </td>
-                        <td className="py-3 pr-3 text-xs text-slate-500">
-                          {humanize(line.category.toLowerCase())}
-                        </td>
-                        <td className="py-3 pr-3">
-                          <form
-                            action={updateEstimate}
-                            className="flex flex-col items-end gap-1"
-                          >
-                            <div className="flex items-center gap-1">
-                              <input
-                                name="budgetQty"
-                                type="number"
-                                step="0.01"
-                                defaultValue={line.budgetQty}
-                                className="w-16 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
-                                aria-label="Budget qty"
-                              />
-                              <span className="text-xs text-slate-400">×</span>
-                              <input
-                                name="budgetUnitPrice"
-                                type="number"
-                                step="0.01"
-                                defaultValue={line.budgetUnitPrice}
-                                className="w-20 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
-                                aria-label="Budget unit price"
-                              />
-                              <button
-                                type="submit"
-                                className="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                              >
-                                Save
-                              </button>
-                            </div>
-                            <span className="text-xs tabular-nums text-slate-700">
-                              {formatCurrency(line.budgetAmount)}
-                            </span>
-                          </form>
-                        </td>
-                        <td className="py-3 pr-3 text-right tabular-nums text-slate-500">
-                          {formatCurrency(line.quotedAmount)}
-                        </td>
-                        <td className="py-3 pr-3 text-right tabular-nums text-slate-500">
-                          {formatCurrency(line.invoicedAmount)}
-                        </td>
-                        <td className="py-3 pr-3">
-                          <form
-                            action={updateActual}
-                            className="flex flex-col items-end gap-1"
-                          >
-                            <div className="flex items-center gap-1">
-                              <input
-                                name="actualQty"
-                                type="number"
-                                step="0.01"
-                                defaultValue={line.actualQty}
-                                className="w-16 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
-                                aria-label="Actual qty"
-                              />
-                              <span className="text-xs text-slate-400">×</span>
-                              <input
-                                name="actualUnitPrice"
-                                type="number"
-                                step="0.01"
-                                defaultValue={line.actualUnitPrice}
-                                className="w-20 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
-                                aria-label="Actual unit price"
-                              />
-                              <button
-                                type="submit"
-                                className="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
-                              >
-                                Save
-                              </button>
-                            </div>
-                            <span className="text-xs tabular-nums text-slate-700">
-                              {formatCurrency(line.actualAmount)}
-                            </span>
-                          </form>
-                        </td>
+                  {linesByCategory.map(([category, lines]) => (
+                    <Fragment key={category}>
+                      <tr className="bg-slate-50/80">
                         <td
-                          className={`py-3 pr-3 text-right tabular-nums font-medium ${
-                            line.variance > 0
-                              ? "text-rose-600"
-                              : line.variance < 0
-                                ? "text-emerald-600"
-                                : "text-slate-500"
-                          }`}
+                          colSpan={8}
+                          className="px-1 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
                         >
-                          {formatCurrency(line.variance)}
-                        </td>
-                        <td className="py-3">
-                          <form action={remove}>
-                            <button
-                              type="submit"
-                              className="text-xs text-slate-400 hover:text-rose-600"
-                            >
-                              Remove
-                            </button>
-                          </form>
+                          {humanize(category.toLowerCase())}
                         </td>
                       </tr>
-                    );
-                  })}
+                      {lines.map((line) => {
+                        const updateEstimate = updateBudgetEstimateForm.bind(
+                          null,
+                          line.id,
+                        );
+                        const updateActual = updateBudgetActualForm.bind(
+                          null,
+                          line.id,
+                        );
+                        const remove = deleteBudgetLineForm.bind(null, line.id);
+                        const leftToBill = Math.max(
+                          0,
+                          line.budgetAmount - line.invoicedAmount,
+                        );
+                        return (
+                          <tr key={line.id} className="align-top">
+                            <td className="py-3 pr-3">
+                              <p className="font-medium text-slate-900">
+                                {line.description}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                {line.unit}
+                                {line.catalogItemId ? " · catalog" : ""}
+                              </p>
+                            </td>
+                            <td className="py-3 pr-3 text-xs text-slate-500">
+                              {humanize(line.category.toLowerCase())}
+                            </td>
+
+                            {view === "estimate" ? (
+                              <td colSpan={3} className="py-3 pr-3">
+                                <form
+                                  action={updateEstimate}
+                                  className="flex flex-wrap items-center justify-end gap-1"
+                                >
+                                  <input
+                                    name="budgetQty"
+                                    type="number"
+                                    step="0.01"
+                                    defaultValue={line.budgetQty}
+                                    className="w-16 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                  />
+                                  <span className="text-xs text-slate-400">×</span>
+                                  <input
+                                    name="budgetUnitPrice"
+                                    type="number"
+                                    step="0.01"
+                                    defaultValue={line.budgetUnitPrice}
+                                    className="w-20 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                  />
+                                  <span className="min-w-[4.5rem] text-right text-xs font-semibold tabular-nums text-slate-800">
+                                    {formatCurrency(line.budgetAmount)}
+                                  </span>
+                                  <button
+                                    type="submit"
+                                    className="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+                                  >
+                                    Save
+                                  </button>
+                                </form>
+                              </td>
+                            ) : null}
+
+                            {view === "costing" ? (
+                              <>
+                                <td className="py-3 pr-3 text-right tabular-nums text-slate-700">
+                                  {formatCurrency(line.budgetAmount)}
+                                </td>
+                                <td className="py-3 pr-3">
+                                  <form
+                                    action={updateActual}
+                                    className="flex flex-col items-end gap-1"
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        name="actualQty"
+                                        type="number"
+                                        step="0.01"
+                                        defaultValue={line.actualQty}
+                                        className="w-14 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                      />
+                                      <span className="text-xs text-slate-400">
+                                        ×
+                                      </span>
+                                      <input
+                                        name="actualUnitPrice"
+                                        type="number"
+                                        step="0.01"
+                                        defaultValue={line.actualUnitPrice}
+                                        className="w-16 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                      />
+                                      <button
+                                        type="submit"
+                                        className="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+                                      >
+                                        Save
+                                      </button>
+                                    </div>
+                                    <span className="text-xs tabular-nums text-slate-700">
+                                      {formatCurrency(line.actualAmount)}
+                                    </span>
+                                  </form>
+                                </td>
+                                <td
+                                  className={cn(
+                                    "py-3 pr-3 text-right tabular-nums font-medium",
+                                    line.variance > 0
+                                      ? "text-rose-600"
+                                      : line.variance < 0
+                                        ? "text-emerald-600"
+                                        : "text-slate-500",
+                                  )}
+                                >
+                                  {formatCurrency(line.variance)}
+                                </td>
+                                <td className="py-3 pr-3 text-right tabular-nums text-slate-500">
+                                  {line.percentUsed == null
+                                    ? "—"
+                                    : `${line.percentUsed.toFixed(0)}%`}
+                                </td>
+                              </>
+                            ) : null}
+
+                            {view === "billing" ? (
+                              <>
+                                <td className="py-3 pr-3 text-right tabular-nums text-slate-700">
+                                  {formatCurrency(line.budgetAmount)}
+                                </td>
+                                <td className="py-3 pr-3 text-right tabular-nums text-slate-700">
+                                  {formatCurrency(line.quotedAmount)}
+                                </td>
+                                <td className="py-3 pr-3 text-right tabular-nums text-slate-700">
+                                  {formatCurrency(line.invoicedAmount)}
+                                </td>
+                                <td className="py-3 pr-3 text-right tabular-nums font-medium text-slate-800">
+                                  {formatCurrency(leftToBill)}
+                                </td>
+                              </>
+                            ) : null}
+
+                            <td className="py-3">
+                              <form action={remove}>
+                                <button
+                                  type="submit"
+                                  className="text-xs text-slate-400 hover:text-rose-600"
+                                >
+                                  Remove
+                                </button>
+                              </form>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -342,7 +429,7 @@ export function JobBudgetPanel({
             className="grid gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-6"
           >
             <p className="sm:col-span-6 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Add from catalog
+              Add cost item from catalog
             </p>
             <label className="sm:col-span-3 text-xs font-medium text-slate-600">
               Catalog item
@@ -353,7 +440,7 @@ export function JobBudgetPanel({
               >
                 <option value="">
                   {catalogItems.length === 0
-                    ? "No catalog items yet — add in Catalog"
+                    ? "No catalog items — add some under Catalog"
                     : "Select item…"}
                 </option>
                 {catalogItems.map((item) => (
@@ -391,18 +478,18 @@ export function JobBudgetPanel({
             className="grid gap-2 border-t border-slate-100 pt-4 sm:grid-cols-6"
           >
             <p className="sm:col-span-6 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Or custom line
+              Or ad-hoc line
             </p>
             <label className="sm:col-span-2 text-xs font-medium text-slate-600">
               Description
               <input
                 name="description"
-                placeholder="e.g. Excavation labor"
+                placeholder="e.g. Rock excavation"
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
               />
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Category
+              Type
               <select
                 name="category"
                 defaultValue="LABOR"
@@ -416,7 +503,7 @@ export function JobBudgetPanel({
               </select>
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Budget qty
+              Qty
               <input
                 name="budgetQty"
                 type="number"
@@ -426,7 +513,7 @@ export function JobBudgetPanel({
               />
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Unit price
+              Unit cost
               <input
                 name="budgetUnitPrice"
                 type="number"
@@ -440,7 +527,7 @@ export function JobBudgetPanel({
                 type="submit"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Add custom
+                Add line
               </button>
             </div>
             <input type="hidden" name="unit" value="each" />
@@ -469,7 +556,7 @@ function SummaryCard({
         ? "border-emerald-200 ring-1 ring-emerald-50"
         : tone === "warn"
           ? "border-amber-200 ring-1 ring-amber-50"
-          : "border-surface-600/40";
+          : "border-slate-200";
   const valueColor =
     tone === "over"
       ? "text-rose-700"

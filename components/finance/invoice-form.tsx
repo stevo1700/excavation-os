@@ -106,7 +106,7 @@ export function InvoiceForm({
           Create invoice
         </button>
         <Link
-          href="/dashboard/invoices"
+          href="/dashboard/documents"
           className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
         >
           Cancel

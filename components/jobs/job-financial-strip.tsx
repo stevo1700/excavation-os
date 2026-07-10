@@ -38,13 +38,13 @@ export function JobFinancialStrip({
     {
       label: "Quoted",
       value: formatCurrency(financials.quotedTotal),
-      href: `/dashboard/quotes?jobId=${jobId}`,
+      href: null,
       sub: `${financials.quoteCount} quote${financials.quoteCount === 1 ? "" : "s"}`,
     },
     {
       label: "Invoiced",
       value: formatCurrency(financials.invoicedTotal),
-      href: `/dashboard/invoices?jobId=${jobId}`,
+      href: null,
       sub: `${financials.invoiceCount} invoice${financials.invoiceCount === 1 ? "" : "s"}`,
     },
     {

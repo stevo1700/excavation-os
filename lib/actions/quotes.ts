@@ -196,7 +196,7 @@ export async function createQuote(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/dashboard/quotes");
-  redirect("/dashboard/quotes");
+  redirect("/dashboard/documents");
 }
 
 /** Update only the status of a quote. */
