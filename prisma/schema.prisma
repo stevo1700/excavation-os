@@ -1,9 +1,10 @@
 // Excavation OS — database schema.
 //
-// Phase 3 introduces a real Postgres data layer behind the dashboard. The
-// shapes here intentionally mirror the domain the UI already renders (jobs,
-// equipment, crew, reports, notes, activity) so the seed in prisma/seed.ts can
-// load the existing mock data into a real database.
+// The Phase 3 models below were reconciled (Phase 6) to match the columns that
+// actually exist in the live Neon database, discovered via an information_schema
+// dump. Enum columns are represented as plain String here because their value
+// sets weren't introspectable from this environment; the server actions map
+// them to the UI's display values. The Phase 4/5 tables already match.
 
 generator client {
   provider = "prisma-client-js"
@@ -14,43 +15,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  ADMIN
-  FOREMAN
-  OPERATOR
-  LABOURER
-}
-
-enum JobStatus {
-  SCHEDULED
-  IN_PROGRESS
-  ON_HOLD
-  COMPLETED
-}
-
-enum EquipmentStatus {
-  AVAILABLE
-  IN_USE
-  MAINTENANCE
-}
-
-enum CrewStatus {
-  ON_SITE
-  AVAILABLE
-  OFF
-}
-
 model User {
   id        String   @id @default(cuid())
   clerkId   String   @unique
-  name      String
   email     String   @unique
-  role      UserRole @default(LABOURER)
+  name      String
+  role      String   @default("LABOURER")
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  foremanJobs  Job[]         @relation("JobForeman")
-  crewMember   CrewMember?
   dailyReports DailyReport[] @relation("ReportAuthor")
   notes        Note[]        @relation("NoteAuthor")
 }
@@ -59,91 +33,350 @@ model Job {
   id            String    @id @default(cuid())
   name          String
   client        String
-  site         String
-  status        JobStatus @default(SCHEDULED)
+  status        String    @default("ACTIVE")
+  scheduledDate DateTime? @db.Date
   startDate     DateTime?
-  estCompletion DateTime?
-  value         Int       @default(0)
+  endDate       DateTime?
+  address       String?
+  city          String?
+  state         String?
+  contractValue Float     @default(0)
   description   String?
-  color         String    @default("amber")
-  foremanId     String?
+  customerId    String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  foreman      User?         @relation("JobForeman", fields: [foremanId], references: [id])
-  equipment    Equipment[]
-  crew         CrewMember[]
-  dailyReports DailyReport[]
-  notes        Note[]
-  activity     ActivityEvent[]
+  customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  equipment        Equipment[]
+  crew             CrewMember[]
+  dailyReports     DailyReport[]
+  notes            Note[]
+  activity         ActivityEvent[]
+  timesheetEntries TimesheetEntry[]
+  portalTokens     ClientPortalToken[]
+  quotes           Quote[]
+  invoices         Invoice[]
 }
 
 model Equipment {
-  id             String          @id @default(cuid())
-  name           String
-  category       String
-  make           String?
-  model          String?
-  year           Int?
-  status         EquipmentStatus @default(AVAILABLE)
-  hoursLogged    Int             @default(0)
-  jobId          String?
-  createdAt      DateTime        @default(now())
+  id           String    @id @default(cuid())
+  name         String
+  type         String
+  status       String    @default("AVAILABLE")
+  year         Int?
+  make         String?
+  model        String?
+  serialNumber String?
+  jobId        String?
+  lastService  DateTime?
+  nextService  DateTime?
+  notes        String?
+  // Short human-readable tag, e.g. "EX-310" (2-letter type prefix + 3-digit
+  // number). Doubles as the QR code's scan target via /e/<assetTag>.
+  assetTag     String    @unique
+  // Canonical scan URL: NEXT_PUBLIC_APP_URL + /e/<assetTag>, or a relative
+  // path if that env var isn't set.
+  qrUrl        String
+  // Generated SVG markup for the QR code, regenerated whenever assetTag
+  // changes. Nullable so existing rows can be backfilled lazily.
+  qrSvg        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Relations
   job Job? @relation(fields: [jobId], references: [id])
 }
 
 model CrewMember {
-  id        String     @id @default(cuid())
-  userId    String?    @unique
-  name      String
-  role      String
-  phone     String?
-  status    CrewStatus @default(AVAILABLE)
-  jobId     String?
-  createdAt DateTime   @default(now())
+  id             String    @id @default(cuid())
+  name           String
+  role           String
+  status         String    @default("available")
+  phone          String?
+  email          String?
+  jobId          String?
+  certifications String[]
+  hireDate       DateTime?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relations
-  user User? @relation(fields: [userId], references: [id])
-  job  Job?  @relation(fields: [jobId], references: [id])
+  job              Job?             @relation(fields: [jobId], references: [id])
+  timesheetEntries TimesheetEntry[]
 }
 
 model DailyReport {
   id            String   @id @default(cuid())
   jobId         String
-  submittedById String
   date          DateTime
+  status        String?
   weather       String?
-  summary       String
-  hoursWorked   Int      @default(0)
+  temperature   Int?
+  workPerformed String
+  hoursWorked   Float    @default(0)
+  crewCount     Int?
+  safetyNotes   String?
+  authorId      String
   createdAt     DateTime @default(now())
-
-  // Relations
-  job         Job  @relation(fields: [jobId], references: [id])
-  submittedBy User @relation("ReportAuthor", fields: [submittedById], references: [id])
-}
-
-model Note {
-  id        String   @id @default(cuid())
-  jobId     String
-  authorId  String
-  body      String
-  createdAt DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
   job    Job  @relation(fields: [jobId], references: [id])
-  author User @relation("NoteAuthor", fields: [authorId], references: [id])
+  author User @relation("ReportAuthor", fields: [authorId], references: [id])
+}
+
+model Note {
+  id         String   @id @default(cuid())
+  jobId      String
+  content    String
+  authorId   String?
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  job    Job   @relation(fields: [jobId], references: [id])
+  author User? @relation("NoteAuthor", fields: [authorId], references: [id])
 }
 
 model ActivityEvent {
   id          String   @id @default(cuid())
   type        String
-  description String
   jobId       String?
+  description String
+  metadata    Json?
+  userId      String?
   createdAt   DateTime @default(now())
 
   // Relations
   job Job? @relation(fields: [jobId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Operations layer (matches the live DB)
+// ---------------------------------------------------------------------------
+
+model TimesheetEntry {
+  id           String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  crewMemberId String
+  jobId        String
+  date         DateTime @db.Date
+  hoursWorked  Decimal  @db.Decimal(5, 2)
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  crewMember CrewMember @relation(fields: [crewMemberId], references: [id], onDelete: Cascade)
+  job        Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model ClientPortalToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  jobId     String
+  token     String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Financial layer + CRM (matches the live DB)
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  name        String
+  contactName String?
+  // Company / business name — distinct from `name`, which may be a contact's
+  // display name for sole-proprietor customers.
+  company     String?
+  email       String?
+  phone       String?
+  address     String?
+  notes       String?
+  stage       String   @default("Lead")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs     Job[]
+  quotes   Quote[]
+  invoices Invoice[]
+}
+
+model Quote {
+  id          String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  // Short label shown alongside the quote number, e.g. "Phase 1 excavation".
+  title       String?
+  jobId       String
+  customerId  String?
+  quoteNumber String    @unique
+  status      String    @default("DRAFT")
+  // Legacy ad-hoc line items (kept for backward compatibility with existing
+  // quotes and the web quote-builder form). New quotes created through the
+  // catalog API also get normalized rows in `lineItemRows`.
+  lineItems   Json      @default("[]")
+  subtotal    Decimal   @default(0) @db.Decimal(12, 2)
+  taxRate     Decimal   @default(0) @db.Decimal(5, 4)
+  taxAmount   Decimal   @default(0) @db.Decimal(12, 2)
+  total       Decimal   @default(0) @db.Decimal(12, 2)
+  notes       String?
+  validUntil  DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  job          Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer     Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoices     Invoice[]
+  lineItemRows QuoteLineItem[]
+}
+
+model Invoice {
+  id            String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  jobId         String
+  customerId    String?
+  quoteId       String?
+  invoiceNumber String    @unique
+  status        String    @default("DRAFT")
+  // Legacy ad-hoc line items — see Quote.lineItems.
+  lineItems     Json      @default("[]")
+  subtotal      Decimal   @default(0) @db.Decimal(12, 2)
+  taxRate       Decimal   @default(0) @db.Decimal(5, 4)
+  taxAmount     Decimal   @default(0) @db.Decimal(12, 2)
+  total         Decimal   @default(0) @db.Decimal(12, 2)
+  // Denormalized sum of `payments.amount`, kept in sync by the payment
+  // endpoints and by the legacy one-shot markInvoicePaid() action.
+  amountPaid    Decimal   @default(0) @db.Decimal(12, 2)
+  dueDate       DateTime? @db.Date
+  paidAt        DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  job          Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer     Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  quote        Quote?            @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  lineItemRows InvoiceLineItem[]
+  payments     Payment[]
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Catalog: reusable line-item library + normalized quote/invoice
+// line items + payment history. Additive: existing Quote/Invoice.lineItems
+// (JSON) keeps working unchanged for pre-existing rows and the web
+// quote/invoice forms; these tables back the new /api/catalog/* endpoints.
+// ---------------------------------------------------------------------------
+
+model CatalogItem {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  // Free-text unit, e.g. "each", "hr", "day", "ton", "sqft".
+  unit        String
+  unitPrice   Decimal  @default(0) @db.Decimal(12, 2)
+  // LABOR / EQUIPMENT / MATERIAL / SUBCONTRACT / OTHER
+  category    String   @default("OTHER")
+  taxable     Boolean  @default(true)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quoteLineItems   QuoteLineItem[]
+  invoiceLineItems InvoiceLineItem[]
+}
+
+model QuoteLineItem {
+  id            String  @id @default(cuid())
+  quoteId       String
+  // Optional — a line item can reference the catalog or be fully ad-hoc.
+  catalogItemId String?
+  description   String
+  quantity      Decimal @default(1) @db.Decimal(12, 2)
+  unitPrice     Decimal @default(0) @db.Decimal(12, 2)
+  amount        Decimal @default(0) @db.Decimal(12, 2)
+  sortOrder     Int     @default(0)
+
+  quote       Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+}
+
+model InvoiceLineItem {
+  id            String  @id @default(cuid())
+  invoiceId     String
+  catalogItemId String?
+  description   String
+  quantity      Decimal @default(1) @db.Decimal(12, 2)
+  unitPrice     Decimal @default(0) @db.Decimal(12, 2)
+  amount        Decimal @default(0) @db.Decimal(12, 2)
+  sortOrder     Int     @default(0)
+
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  amount    Decimal  @db.Decimal(12, 2)
+  // CASH / CHECK / CARD / TRANSFER / OTHER
+  method    String   @default("OTHER")
+  reference String?
+  paidAt    DateTime @default(now())
+  notes     String?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9 — Equipment telematics integrations (Komatsu / Case / Bobcat, AEMP
+// 2.0). Additive; no relation to existing models other than a soft (non-FK)
+// link from TelematicsAsset.assetTag to Equipment.assetTag when matched.
+// ---------------------------------------------------------------------------
+
+model TelematicsConnection {
+  id                   String    @id @default(cuid())
+  // KOMATSU / CASE / BOBCAT — one connection per OEM.
+  oem                  String    @unique
+  // DISCONNECTED / CONNECTED / ERROR
+  status               String    @default("DISCONNECTED")
+  // AES-256-GCM ciphertext (see lib/crypto.ts); never stores plaintext.
+  encryptedCredentials String?
+  lastSyncAt           DateTime?
+  lastError            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  assets TelematicsAsset[]
+}
+
+model TelematicsAsset {
+  id              String    @id @default(cuid())
+  connectionId    String
+  // Denormalized copy of the parent connection's oem, for a simple composite
+  // unique constraint without a join.
+  oem             String
+  externalAssetId String
+  make            String?
+  model           String?
+  serial          String?
+  // Best-effort match to Equipment.assetTag (by serial number); null if
+  // unmatched. Not a hard FK — a sync can report machines this app doesn't
+  // have an Equipment row for yet.
+  assetTag        String?
+  lat             Float?
+  lng             Float?
+  engineHours     Float?
+  fuelPercent     Float?
+  faultCodes      Json      @default("[]")
+  lastReportedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  connection TelematicsConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([oem, externalAssetId])
 }
