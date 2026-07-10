@@ -25,14 +25,14 @@ const prisma = new PrismaClient();
 // --- enum mappings: UI string unions -> Prisma enums --------------------------
 
 const jobStatusMap: Record<MockJobStatus, JobStatus> = {
-  scheduled: JobStatus.QUOTED,
-  in_progress: JobStatus.ACTIVE,
+  scheduled: JobStatus.SCHEDULED,
+  in_progress: JobStatus.IN_PROGRESS,
   on_hold: JobStatus.ON_HOLD,
-  completed: JobStatus.COMPLETE,
+  completed: JobStatus.COMPLETED,
 };
 
 const equipmentStatusMap: Record<MockEquipmentStatus, EquipmentStatus> = {
-  available: EquipmentStatus.IDLE,
+  available: EquipmentStatus.AVAILABLE,
   in_use: EquipmentStatus.IN_USE,
   maintenance: EquipmentStatus.MAINTENANCE,
 };
@@ -130,7 +130,7 @@ async function main() {
       id: job.id,
       name: job.name,
       client: job.client,
-      siteAddress: job.site,
+      site: job.site,
       status: jobStatusMap[job.status],
       startDate: new Date(job.startDate),
       estCompletion: new Date(job.dueDate),
@@ -153,7 +153,7 @@ async function main() {
         make,
         model,
         status: equipmentStatusMap[machine.status],
-        hoursThisMonth: monthlyHours(machine.status),
+        hoursLogged: monthlyHours(machine.status),
         jobId: machine.assignedJob,
       };
     }),

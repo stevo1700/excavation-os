@@ -13,10 +13,13 @@ import {
 import { NewJobModal } from "@/components/dashboard/new-job-modal";
 import { AddEquipmentModal } from "@/components/dashboard/add-equipment-modal";
 import { AddCrewModal } from "@/components/dashboard/add-crew-modal";
-import { activity, equipment, jobs, kpis, weeklyRevenue } from "@/lib/data";
+import { getDashboardData } from "@/lib/actions/dashboard";
 import { formatCurrency, formatDate, jobColor } from "@/lib/utils";
 
-export default function DashboardOverviewPage() {
+export default async function DashboardOverviewPage() {
+  const { jobs, equipment, crew, activity, kpis, weeklyRevenue } =
+    await getDashboardData();
+
   const activeJobs = jobs.filter((job) => job.status === "in_progress");
 
   const utilization: UtilizationSlice[] = [
@@ -46,7 +49,7 @@ export default function DashboardOverviewPage() {
           </h2>
           <p className="mt-1 text-sm text-slate-500">
             A snapshot across jobs, fleet, and crew — week of{" "}
-            {formatDate("2026-06-29")}.
+            {formatDate(new Date().toISOString())}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -66,7 +69,7 @@ export default function DashboardOverviewPage() {
         <Card className="lg:col-span-2">
           <CardHeader
             title="Weekly revenue"
-            description="Billed across all active jobs, trailing eight weeks"
+            description="Estimated from active job run-rates, trailing eight weeks"
           />
           <CardBody>
             <RevenueChart data={weeklyRevenue} />
@@ -97,33 +100,39 @@ export default function DashboardOverviewPage() {
             }
           />
           <CardBody className="space-y-1">
-            {activeJobs.map((job) => {
-              const c = jobColor(job.color);
-              return (
-                <Link
-                  key={job.id}
-                  href={`/dashboard/jobs/${job.id}`}
-                  className="-mx-2 flex items-center justify-between gap-4 rounded-lg px-2 py-2.5 transition-colors hover:bg-slate-50"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={`h-8 w-1.5 shrink-0 rounded-full ${c.dot}`}
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {job.name}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {job.client} · {job.foreman}
-                      </p>
+            {activeJobs.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-400">
+                No active jobs — create one to get started.
+              </p>
+            ) : (
+              activeJobs.map((job) => {
+                const c = jobColor(job.color);
+                return (
+                  <Link
+                    key={job.id}
+                    href={`/dashboard/jobs/${job.id}`}
+                    className="-mx-2 flex items-center justify-between gap-4 rounded-lg px-2 py-2.5 transition-colors hover:bg-slate-50"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={`h-8 w-1.5 shrink-0 rounded-full ${c.dot}`}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">
+                          {job.name}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {job.client} · {job.foreman}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="hidden sm:block">
-                    <ProgressBar value={job.progress} />
-                  </div>
-                </Link>
-              );
-            })}
+                    <div className="hidden sm:block">
+                      <ProgressBar value={job.progress} />
+                    </div>
+                  </Link>
+                );
+              })
+            )}
           </CardBody>
         </Card>
 

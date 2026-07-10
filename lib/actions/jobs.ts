@@ -6,10 +6,10 @@ import { jobs as mockJobs } from "@/lib/data";
 import type { Job, JobColor, JobStatus } from "@/lib/types";
 
 const uiStatus: Record<PrismaJobStatus, JobStatus> = {
-  QUOTED: "scheduled",
-  ACTIVE: "in_progress",
+  SCHEDULED: "scheduled",
+  IN_PROGRESS: "in_progress",
   ON_HOLD: "on_hold",
-  COMPLETE: "completed",
+  COMPLETED: "completed",
 };
 
 // The schema does not track a progress percentage; approximate it from status.
@@ -39,7 +39,7 @@ function toUiJob(job: JobWithRelations): Job {
     id: job.id,
     name: job.name,
     client: job.client,
-    site: job.siteAddress,
+    site: job.site,
     status,
     foreman: job.foreman?.name ?? "Unassigned",
     progress: progressForStatus[status],

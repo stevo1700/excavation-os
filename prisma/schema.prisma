@@ -22,14 +22,14 @@ enum UserRole {
 }
 
 enum JobStatus {
-  QUOTED
-  ACTIVE
+  SCHEDULED
+  IN_PROGRESS
   ON_HOLD
-  COMPLETE
+  COMPLETED
 }
 
 enum EquipmentStatus {
-  IDLE
+  AVAILABLE
   IN_USE
   MAINTENANCE
 }
@@ -59,8 +59,8 @@ model Job {
   id            String    @id @default(cuid())
   name          String
   client        String
-  siteAddress   String
-  status        JobStatus @default(QUOTED)
+  site         String
+  status        JobStatus @default(SCHEDULED)
   startDate     DateTime?
   estCompletion DateTime?
   value         Int       @default(0)
@@ -86,8 +86,8 @@ model Equipment {
   make           String?
   model          String?
   year           Int?
-  status         EquipmentStatus @default(IDLE)
-  hoursThisMonth Int             @default(0)
+  status         EquipmentStatus @default(AVAILABLE)
+  hoursLogged    Int             @default(0)
   jobId          String?
   createdAt      DateTime        @default(now())
 

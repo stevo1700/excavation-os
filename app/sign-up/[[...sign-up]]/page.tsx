@@ -1,5 +1,5 @@
-import { SignUp } from "@clerk/nextjs";
-import { authAppearance } from "@/lib/clerk-appearance";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
 export default function SignUpPage() {
   return (
@@ -9,10 +9,16 @@ export default function SignUpPage() {
           Excavation<span className="text-brand-500">OS</span>
         </p>
         <p className="mt-1 text-sm text-slate-400">
-          Create an account to get started
+          Authentication is currently disabled for testing.
         </p>
       </div>
-      <SignUp appearance={authAppearance} />
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
+      >
+        Go to dashboard
+        <ArrowRight className="h-4 w-4" />
+      </Link>
     </main>
   );
 }

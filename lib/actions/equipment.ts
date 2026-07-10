@@ -12,13 +12,13 @@ import type {
 
 // Map the Prisma enum back to the string union the UI renders.
 const uiStatus: Record<PrismaEquipmentStatus, EquipmentStatus> = {
-  IDLE: "available",
+  AVAILABLE: "available",
   IN_USE: "in_use",
   MAINTENANCE: "maintenance",
 };
 
 const dbStatus: Record<EquipmentStatus, PrismaEquipmentStatus> = {
-  available: "IDLE",
+  available: "AVAILABLE",
   in_use: "IN_USE",
   maintenance: "MAINTENANCE",
 };
@@ -42,10 +42,10 @@ export async function getEquipment(): Promise<Equipment[]> {
       name: machine.name,
       category: machine.category as EquipmentCategory,
       status: uiStatus[machine.status],
-      location: machine.job?.siteAddress ?? "Main yard",
+      location: machine.job?.site ?? "Main yard",
       assignedJob: machine.jobId,
-      hoursLogged: machine.hoursThisMonth,
-      nextServiceHours: machine.hoursThisMonth + 200,
+      hoursLogged: machine.hoursLogged,
+      nextServiceHours: machine.hoursLogged + 200,
     }));
   } catch {
     return mockEquipment;
