@@ -192,6 +192,8 @@ export async function getJobHub(jobId: string): Promise<JobHubData | null> {
         lines: [],
         byCategory: [],
         budgetTotal: 0,
+        priceTotal: 0,
+        profitTotal: 0,
         actualTotal: 0,
         quotedTotal: 0,
         invoicedTotal: 0,

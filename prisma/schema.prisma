@@ -78,8 +78,14 @@ model JobBudgetLine {
   catalogItemId   String?
   unit            String   @default("each")
   budgetQty       Decimal  @default(1) @db.Decimal(12, 2)
+  // Unit cost (what it costs you)
   budgetUnitPrice Decimal  @default(0) @db.Decimal(12, 2)
+  // Extended cost = qty × unit cost
   budgetAmount    Decimal  @default(0) @db.Decimal(12, 2)
+  // JobTread-style markup → customer unit price + extended price
+  markupPercent   Decimal  @default(0) @db.Decimal(8, 2)
+  unitPrice       Decimal  @default(0) @db.Decimal(12, 2)
+  priceAmount     Decimal  @default(0) @db.Decimal(12, 2)
   actualQty       Decimal  @default(0) @db.Decimal(12, 2)
   actualUnitPrice Decimal  @default(0) @db.Decimal(12, 2)
   actualAmount    Decimal  @default(0) @db.Decimal(12, 2)

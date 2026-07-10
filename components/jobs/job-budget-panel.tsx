@@ -69,37 +69,27 @@ export function JobBudgetPanel({
           value={formatCurrency(budget.budgetTotal)}
         />
         <SummaryCard
+          label="Sell price"
+          value={formatCurrency(budget.priceTotal)}
+        />
+        <SummaryCard
+          label="Projected profit"
+          value={formatCurrency(budget.profitTotal)}
+          tone={budget.profitTotal < 0 ? "over" : budget.profitTotal > 0 ? "under" : "neutral"}
+        />
+        <SummaryCard
           label="Actual cost"
           value={formatCurrency(budget.actualTotal)}
         />
         <SummaryCard
-          label="Variance"
+          label="Cost variance"
           value={formatCurrency(budget.variance)}
           tone={over ? "over" : under ? "under" : "neutral"}
           hint={over ? "over budget" : under ? "under budget" : "on target"}
         />
         <SummaryCard
-          label="Quoted"
-          value={formatCurrency(budget.quotedTotal)}
-        />
-        <SummaryCard
           label="Invoiced"
           value={formatCurrency(budget.invoicedTotal)}
-        />
-        <SummaryCard
-          label="% of budget used"
-          value={
-            budget.percentUsed == null
-              ? "—"
-              : `${budget.percentUsed.toFixed(0)}%`
-          }
-          tone={
-            budget.percentUsed != null && budget.percentUsed > 100
-              ? "over"
-              : budget.percentUsed != null && budget.percentUsed >= 90
-                ? "warn"
-                : "neutral"
-          }
         />
       </div>
 
@@ -187,7 +177,7 @@ export function JobBudgetPanel({
           }
           description={
             view === "estimate"
-              ? "Build the job budget from catalog items (JobTread budget-first)"
+              ? "Cost → markup → customer price. Quotes use sell price, costing tracks your cost."
               : view === "costing"
                 ? "Budgeted cost · actual cost · variance (over = red, under = green)"
                 : "What you’ve quoted and invoiced against each budget line"
@@ -213,7 +203,16 @@ export function JobBudgetPanel({
                           Unit cost
                         </th>
                         <th className="pb-2 pr-3 font-medium text-right">
-                          Budgeted
+                          Markup %
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Unit price
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Ext. cost
+                        </th>
+                        <th className="pb-2 pr-3 font-medium text-right">
+                          Ext. price
                         </th>
                       </>
                     ) : null}
@@ -293,7 +292,7 @@ export function JobBudgetPanel({
                             </td>
 
                             {view === "estimate" ? (
-                              <td colSpan={3} className="py-3 pr-3">
+                              <td colSpan={6} className="py-3 pr-3">
                                 <form
                                   action={updateEstimate}
                                   className="flex flex-wrap items-center justify-end gap-1"
@@ -303,18 +302,38 @@ export function JobBudgetPanel({
                                     type="number"
                                     step="0.01"
                                     defaultValue={line.budgetQty}
-                                    className="w-16 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                    className="w-14 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                    title="Qty"
                                   />
-                                  <span className="text-xs text-slate-400">×</span>
                                   <input
                                     name="budgetUnitPrice"
                                     type="number"
                                     step="0.01"
                                     defaultValue={line.budgetUnitPrice}
-                                    className="w-20 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                    className="w-16 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                    title="Unit cost"
                                   />
-                                  <span className="min-w-[4.5rem] text-right text-xs font-semibold tabular-nums text-slate-800">
+                                  <input
+                                    name="markupPercent"
+                                    type="number"
+                                    step="0.1"
+                                    defaultValue={line.markupPercent}
+                                    className="w-14 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                    title="Markup %"
+                                  />
+                                  <input
+                                    name="unitPrice"
+                                    type="number"
+                                    step="0.01"
+                                    defaultValue={line.unitPrice}
+                                    className="w-16 rounded border border-slate-200 px-1.5 py-1 text-right text-xs"
+                                    title="Unit price (customer)"
+                                  />
+                                  <span className="min-w-[3.5rem] text-right text-[11px] tabular-nums text-slate-500">
                                     {formatCurrency(line.budgetAmount)}
+                                  </span>
+                                  <span className="min-w-[3.5rem] text-right text-[11px] font-semibold tabular-nums text-slate-800">
+                                    {formatCurrency(line.priceAmount)}
                                   </span>
                                   <button
                                     type="submit"
@@ -522,10 +541,20 @@ export function JobBudgetPanel({
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
               />
             </label>
-            <div className="flex items-end">
+            <label className="text-xs font-medium text-slate-600">
+              Markup %
+              <input
+                name="markupPercent"
+                type="number"
+                step="0.1"
+                defaultValue={30}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="flex items-end sm:col-span-6">
               <button
                 type="submit"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Add line
               </button>

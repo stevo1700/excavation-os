@@ -15,14 +15,24 @@ export interface BudgetLineView {
   catalogItemId: string | null;
   unit: string;
   budgetQty: number;
+  /** Unit cost (what it costs you). */
   budgetUnitPrice: number;
+  /** Extended cost = qty × unit cost. */
   budgetAmount: number;
+  /** Markup % applied on cost → customer unit price. */
+  markupPercent: number;
+  /** Customer unit price (after markup). */
+  unitPrice: number;
+  /** Extended sell = qty × unit price. */
+  priceAmount: number;
+  /** priceAmount - budgetAmount */
+  profit: number;
   actualQty: number;
   actualUnitPrice: number;
   actualAmount: number;
   quotedAmount: number;
   invoicedAmount: number;
-  /** actual - budget (positive = over budget) */
+  /** actual - budget cost (positive = over budget) */
   variance: number;
   /** actual / budget * 100 when budget > 0 */
   percentUsed: number | null;
@@ -42,7 +52,12 @@ export interface BudgetCategoryRollup {
 export interface JobBudgetSnapshot {
   lines: BudgetLineView[];
   byCategory: BudgetCategoryRollup[];
+  /** Total cost (what you expect to spend). */
   budgetTotal: number;
+  /** Total sell price (what you bill the customer). */
+  priceTotal: number;
+  /** Projected profit = price - cost. */
+  profitTotal: number;
   actualTotal: number;
   quotedTotal: number;
   invoicedTotal: number;
@@ -63,6 +78,35 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** Default markup when adding catalog items (30%). */
+export const DEFAULT_MARKUP_PERCENT = 30;
+
+function priceFromCost(unitCost: number, markupPercent: number): number {
+  return round2(unitCost * (1 + markupPercent / 100));
+}
+
+function markupFromPrices(unitCost: number, unitPrice: number): number {
+  if (unitCost <= 0) return 0;
+  return round2(((unitPrice - unitCost) / unitCost) * 100);
+}
+
+function pricingFields(qty: number, unitCost: number, markupPercent: number, unitPrice?: number) {
+  const cost = unitCost;
+  const markup = markupPercent;
+  const price =
+    unitPrice !== undefined && unitPrice !== null
+      ? unitPrice
+      : priceFromCost(cost, markup);
+  return {
+    budgetQty: qty,
+    budgetUnitPrice: cost,
+    budgetAmount: round2(qty * cost),
+    markupPercent: markup,
+    unitPrice: price,
+    priceAmount: round2(qty * price),
+  };
+}
+
 function asCategory(raw: string | null | undefined): CatalogCategory {
   const upper = (raw ?? "OTHER").toUpperCase();
   return (CATALOG_CATEGORIES as string[]).includes(upper)
@@ -80,6 +124,9 @@ function toView(row: {
   budgetQty: { toNumber(): number } | number;
   budgetUnitPrice: { toNumber(): number } | number;
   budgetAmount: { toNumber(): number } | number;
+  markupPercent?: { toNumber(): number } | number | null;
+  unitPrice?: { toNumber(): number } | number | null;
+  priceAmount?: { toNumber(): number } | number | null;
   actualQty: { toNumber(): number } | number;
   actualUnitPrice: { toNumber(): number } | number;
   actualAmount: { toNumber(): number } | number;
@@ -90,6 +137,20 @@ function toView(row: {
 }): BudgetLineView {
   const budgetAmount = money(row.budgetAmount);
   const actualAmount = money(row.actualAmount);
+  const unitCost = money(row.budgetUnitPrice);
+  const qty = money(row.budgetQty);
+  let markup = money(row.markupPercent);
+  let unitPrice = money(row.unitPrice);
+  let priceAmount = money(row.priceAmount);
+  // Backfill legacy rows that only had cost
+  if (unitPrice <= 0 && unitCost > 0) {
+    if (markup <= 0) markup = DEFAULT_MARKUP_PERCENT;
+    unitPrice = priceFromCost(unitCost, markup);
+    priceAmount = round2(qty * unitPrice);
+  }
+  if (priceAmount <= 0 && unitPrice > 0) {
+    priceAmount = round2(qty * unitPrice);
+  }
   return {
     id: row.id,
     jobId: row.jobId,
@@ -97,9 +158,13 @@ function toView(row: {
     category: asCategory(row.category),
     catalogItemId: row.catalogItemId,
     unit: row.unit,
-    budgetQty: money(row.budgetQty),
-    budgetUnitPrice: money(row.budgetUnitPrice),
+    budgetQty: qty,
+    budgetUnitPrice: unitCost,
     budgetAmount,
+    markupPercent: markup,
+    unitPrice,
+    priceAmount,
+    profit: round2(priceAmount - budgetAmount),
     actualQty: money(row.actualQty),
     actualUnitPrice: money(row.actualUnitPrice),
     actualAmount,
@@ -142,6 +207,8 @@ function rollup(lines: BudgetLineView[]): JobBudgetSnapshot {
   }).filter((b) => b.lineCount > 0 || b.budgetAmount > 0 || b.actualAmount > 0);
 
   const budgetTotal = round2(lines.reduce((s, l) => s + l.budgetAmount, 0));
+  const priceTotal = round2(lines.reduce((s, l) => s + l.priceAmount, 0));
+  const profitTotal = round2(priceTotal - budgetTotal);
   const actualTotal = round2(lines.reduce((s, l) => s + l.actualAmount, 0));
   const quotedTotal = round2(lines.reduce((s, l) => s + l.quotedAmount, 0));
   const invoicedTotal = round2(lines.reduce((s, l) => s + l.invoicedAmount, 0));
@@ -149,6 +216,8 @@ function rollup(lines: BudgetLineView[]): JobBudgetSnapshot {
     lines,
     byCategory,
     budgetTotal,
+    priceTotal,
+    profitTotal,
     actualTotal,
     quotedTotal,
     invoicedTotal,
@@ -181,6 +250,8 @@ export async function getJobBudget(jobId: string): Promise<JobBudgetSnapshot> {
       lines: [],
       byCategory: [],
       budgetTotal: 0,
+      priceTotal: 0,
+      profitTotal: 0,
       actualTotal: 0,
       quotedTotal: 0,
       invoicedTotal: 0,
@@ -199,12 +270,21 @@ export async function addBudgetLine(input: {
   unit?: string;
   budgetQty?: number;
   budgetUnitPrice?: number;
+  markupPercent?: number;
+  unitPrice?: number;
   actualQty?: number;
   actualUnitPrice?: number;
   notes?: string;
 }): Promise<BudgetLineView> {
   const budgetQty = input.budgetQty ?? 1;
   const budgetUnitPrice = input.budgetUnitPrice ?? 0;
+  const markupPercent = input.markupPercent ?? DEFAULT_MARKUP_PERCENT;
+  const priced = pricingFields(
+    budgetQty,
+    budgetUnitPrice,
+    markupPercent,
+    input.unitPrice,
+  );
   const actualQty = input.actualQty ?? 0;
   const actualUnitPrice = input.actualUnitPrice ?? 0;
   const maxSort = await prisma.jobBudgetLine.aggregate({
@@ -219,9 +299,7 @@ export async function addBudgetLine(input: {
       category: asCategory(input.category),
       catalogItemId: input.catalogItemId ?? null,
       unit: input.unit?.trim() || "each",
-      budgetQty,
-      budgetUnitPrice,
-      budgetAmount: round2(budgetQty * budgetUnitPrice),
+      ...priced,
       actualQty,
       actualUnitPrice,
       actualAmount: round2(actualQty * actualUnitPrice),
@@ -253,6 +331,7 @@ export async function addBudgetLineFromCatalog(
     unit: item.unit,
     budgetQty: qty,
     budgetUnitPrice: money(item.unitPrice),
+    markupPercent: DEFAULT_MARKUP_PERCENT,
   });
 }
 
@@ -264,6 +343,8 @@ export async function updateBudgetLine(
     unit?: string;
     budgetQty?: number;
     budgetUnitPrice?: number;
+    markupPercent?: number;
+    unitPrice?: number;
     actualQty?: number;
     actualUnitPrice?: number;
     notes?: string | null;
@@ -278,6 +359,31 @@ export async function updateBudgetLine(
     input.budgetUnitPrice !== undefined
       ? input.budgetUnitPrice
       : money(existing.budgetUnitPrice);
+
+  let markupPercent =
+    input.markupPercent !== undefined
+      ? input.markupPercent
+      : money(existing.markupPercent);
+  let unitPrice =
+    input.unitPrice !== undefined ? input.unitPrice : money(existing.unitPrice);
+
+  // If cost or markup changed (without explicit unitPrice), recompute sell price.
+  if (
+    (input.budgetUnitPrice !== undefined || input.markupPercent !== undefined) &&
+    input.unitPrice === undefined
+  ) {
+    if (markupPercent <= 0 && money(existing.unitPrice) > 0) {
+      markupPercent = markupFromPrices(budgetUnitPrice, money(existing.unitPrice));
+    }
+    if (markupPercent <= 0) markupPercent = DEFAULT_MARKUP_PERCENT;
+    unitPrice = priceFromCost(budgetUnitPrice, markupPercent);
+  }
+  // If only sell price changed, recompute markup.
+  if (input.unitPrice !== undefined && input.markupPercent === undefined) {
+    markupPercent = markupFromPrices(budgetUnitPrice, unitPrice);
+  }
+
+  const priced = pricingFields(budgetQty, budgetUnitPrice, markupPercent, unitPrice);
   const actualQty =
     input.actualQty !== undefined ? input.actualQty : money(existing.actualQty);
   const actualUnitPrice =
@@ -295,9 +401,7 @@ export async function updateBudgetLine(
         ? { category: asCategory(input.category) }
         : {}),
       ...(input.unit !== undefined ? { unit: input.unit.trim() || "each" } : {}),
-      budgetQty,
-      budgetUnitPrice,
-      budgetAmount: round2(budgetQty * budgetUnitPrice),
+      ...priced,
       actualQty,
       actualUnitPrice,
       actualAmount: round2(actualQty * actualUnitPrice),
@@ -387,21 +491,29 @@ export async function importBudgetFromQuote(input: {
 
   if (drafts.length > 0) {
     await prisma.jobBudgetLine.createMany({
-      data: drafts.map((d, i) => ({
-        jobId: input.jobId,
-        description: d.description,
-        category: d.category,
-        catalogItemId: d.catalogItemId,
-        unit: d.unit,
-        budgetQty: d.qty,
-        budgetUnitPrice: d.unitPrice,
-        budgetAmount: round2(d.qty * d.unitPrice),
-        actualQty: 0,
-        actualUnitPrice: 0,
-        actualAmount: 0,
-        sortOrder: startSort + i,
-        sourceQuoteId: quote.id,
-      })),
+      data: drafts.map((d, i) => {
+        // Quote lines are customer prices; treat as sell, assume 0 markup until edited.
+        const unitPrice = d.unitPrice;
+        const unitCost = unitPrice; // cost unknown on import
+        return {
+          jobId: input.jobId,
+          description: d.description,
+          category: d.category,
+          catalogItemId: d.catalogItemId,
+          unit: d.unit,
+          budgetQty: d.qty,
+          budgetUnitPrice: unitCost,
+          budgetAmount: round2(d.qty * unitCost),
+          markupPercent: 0,
+          unitPrice,
+          priceAmount: round2(d.qty * unitPrice),
+          actualQty: 0,
+          actualUnitPrice: 0,
+          actualAmount: 0,
+          sortOrder: startSort + i,
+          sourceQuoteId: quote.id,
+        };
+      }),
     });
   }
 
@@ -431,6 +543,11 @@ export async function addBudgetLineForm(
     unit: String(formData.get("unit") ?? "each"),
     budgetQty: Number(formData.get("budgetQty")) || 1,
     budgetUnitPrice: Number(formData.get("budgetUnitPrice")) || 0,
+    markupPercent:
+      formData.get("markupPercent") != null &&
+      String(formData.get("markupPercent")) !== ""
+        ? Number(formData.get("markupPercent")) || 0
+        : DEFAULT_MARKUP_PERCENT,
     actualQty: Number(formData.get("actualQty")) || 0,
     actualUnitPrice: Number(formData.get("actualUnitPrice")) || 0,
   });
@@ -450,9 +567,17 @@ export async function updateBudgetEstimateForm(
   lineId: string,
   formData: FormData,
 ): Promise<void> {
+  const markupRaw = formData.get("markupPercent");
+  const priceRaw = formData.get("unitPrice");
   await updateBudgetLine(lineId, {
     budgetQty: Number(formData.get("budgetQty")) || 0,
     budgetUnitPrice: Number(formData.get("budgetUnitPrice")) || 0,
+    ...(markupRaw != null && String(markupRaw) !== ""
+      ? { markupPercent: Number(markupRaw) || 0 }
+      : {}),
+    ...(priceRaw != null && String(priceRaw) !== ""
+      ? { unitPrice: Number(priceRaw) || 0 }
+      : {}),
   });
 }
 
@@ -495,12 +620,24 @@ export async function createQuoteFromBudget(jobId: string): Promise<string> {
     throw new Error("Add budget lines before creating a quote.");
   }
 
-  const items = lines.map((line) => ({
-    description: line.description,
-    quantity: money(line.budgetQty),
-    unitPrice: money(line.budgetUnitPrice),
-    lineTotal: money(line.budgetAmount),
-  }));
+  const items = lines.map((line) => {
+    const qty = money(line.budgetQty);
+    const unitCost = money(line.budgetUnitPrice);
+    let unitPrice = money(line.unitPrice);
+    if (unitPrice <= 0) {
+      const markup =
+        money(line.markupPercent) > 0
+          ? money(line.markupPercent)
+          : DEFAULT_MARKUP_PERCENT;
+      unitPrice = priceFromCost(unitCost, markup);
+    }
+    return {
+      description: line.description,
+      quantity: qty,
+      unitPrice,
+      lineTotal: round2(qty * unitPrice),
+    };
+  });
   const subtotal = round2(items.reduce((s, i) => s + i.lineTotal, 0));
 
   const year = new Date().getFullYear();
@@ -522,7 +659,7 @@ export async function createQuoteFromBudget(jobId: string): Promise<string> {
       taxRate: 0,
       taxAmount: 0,
       total: subtotal,
-      notes: "Generated from job budget lines.",
+      notes: "Generated from job budget (customer sell prices).",
     },
   });
 
@@ -533,18 +670,18 @@ export async function createQuoteFromBudget(jobId: string): Promise<string> {
       budgetLineId: line.id,
       description: line.description,
       quantity: line.budgetQty,
-      unitPrice: line.budgetUnitPrice,
-      amount: line.budgetAmount,
+      unitPrice: items[i].unitPrice,
+      amount: items[i].lineTotal,
       sortOrder: i,
     })),
   });
 
-  // Stamp quoted amount on each budget line (replace with this quote's amounts)
+  // Stamp quoted amount = customer sell total
   await Promise.all(
-    lines.map((line) =>
+    lines.map((line, i) =>
       prisma.jobBudgetLine.update({
         where: { id: line.id },
-        data: { quotedAmount: line.budgetAmount },
+        data: { quotedAmount: items[i].lineTotal },
       }),
     ),
   );
@@ -587,12 +724,24 @@ export async function createInvoiceFromBudget(jobId: string): Promise<string> {
     throw new Error("Add budget lines before creating an invoice.");
   }
 
-  const items = lines.map((line) => ({
-    description: line.description,
-    quantity: money(line.budgetQty),
-    unitPrice: money(line.budgetUnitPrice),
-    lineTotal: money(line.budgetAmount),
-  }));
+  const items = lines.map((line) => {
+    const qty = money(line.budgetQty);
+    const unitCost = money(line.budgetUnitPrice);
+    let unitPrice = money(line.unitPrice);
+    if (unitPrice <= 0) {
+      const markup =
+        money(line.markupPercent) > 0
+          ? money(line.markupPercent)
+          : DEFAULT_MARKUP_PERCENT;
+      unitPrice = priceFromCost(unitCost, markup);
+    }
+    return {
+      description: line.description,
+      quantity: qty,
+      unitPrice,
+      lineTotal: round2(qty * unitPrice),
+    };
+  });
   const subtotal = round2(items.reduce((s, i) => s + i.lineTotal, 0));
 
   const year = new Date().getFullYear();
@@ -614,7 +763,7 @@ export async function createInvoiceFromBudget(jobId: string): Promise<string> {
       taxAmount: 0,
       total: subtotal,
       amountPaid: 0,
-      notes: "Generated from job budget lines.",
+      notes: "Generated from job budget (customer sell prices).",
     },
   });
 
@@ -625,17 +774,17 @@ export async function createInvoiceFromBudget(jobId: string): Promise<string> {
       budgetLineId: line.id,
       description: line.description,
       quantity: line.budgetQty,
-      unitPrice: line.budgetUnitPrice,
-      amount: line.budgetAmount,
+      unitPrice: items[i].unitPrice,
+      amount: items[i].lineTotal,
       sortOrder: i,
     })),
   });
 
   await Promise.all(
-    lines.map((line) =>
+    lines.map((line, i) =>
       prisma.jobBudgetLine.update({
         where: { id: line.id },
-        data: { invoicedAmount: line.budgetAmount },
+        data: { invoicedAmount: items[i].lineTotal },
       }),
     ),
   );

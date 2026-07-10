@@ -459,12 +459,24 @@ function OverviewTab({
             }
           />
           <CardBody className="space-y-2 text-sm">
-            <Row k="Budget" v={formatCurrency(budget.budgetTotal)} />
+            <Row k="Budgeted cost" v={formatCurrency(budget.budgetTotal)} />
+            <Row k="Sell price" v={formatCurrency(budget.priceTotal)} />
+            <Row
+              k="Projected profit"
+              v={formatCurrency(budget.profitTotal)}
+              tone={
+                budget.profitTotal < 0
+                  ? "bad"
+                  : budget.profitTotal > 0
+                    ? "good"
+                    : undefined
+              }
+            />
             <Row k="Quoted" v={formatCurrency(budget.quotedTotal)} />
             <Row k="Invoiced" v={formatCurrency(budget.invoicedTotal)} />
-            <Row k="Actual" v={formatCurrency(budget.actualTotal)} />
+            <Row k="Actual cost" v={formatCurrency(budget.actualTotal)} />
             <Row
-              k="Variance"
+              k="Cost variance"
               v={formatCurrency(budget.variance)}
               tone={
                 budget.variance > 0
