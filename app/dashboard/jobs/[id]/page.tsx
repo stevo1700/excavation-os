@@ -22,6 +22,7 @@ import { getReportsForJob } from "@/lib/actions/reports";
 import { getTimesheetEntries } from "@/lib/actions/timesheets";
 import { getQuotes } from "@/lib/actions/quotes";
 import { getInvoices } from "@/lib/actions/invoices";
+import { getCatalogItems } from "@/lib/actions/catalog-items";
 import { formatCurrency, jobColor } from "@/lib/utils";
 
 // Render per-request so the detail reflects live database state.
@@ -40,7 +41,7 @@ export default async function JobDetailPage({
   const { job, customer, financials, assignments, availableCrew, availableEquipment, budget } =
     hub;
 
-  const [crew, equipment, reports, timesheets, quotes, invoices] =
+  const [crew, equipment, reports, timesheets, quotes, invoices, catalogItems] =
     await Promise.all([
       getCrew(),
       getEquipment(),
@@ -48,6 +49,7 @@ export default async function JobDetailPage({
       getTimesheetEntries({ jobId: job.id }),
       getQuotes({ jobId: job.id }),
       getInvoices({ jobId: job.id }),
+      getCatalogItems({ activeOnly: true }),
     ]);
 
   // Prefer active assignment ledger; fall back to live jobId pointers.
@@ -156,12 +158,20 @@ export default async function JobDetailPage({
       </div>
 
       <div className="mb-8">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Budget vs actual
-        </h3>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Budget
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Single ledger — estimate, quote, invoice, and actuals on the same lines
+            </p>
+          </div>
+        </div>
         <JobBudgetPanel
           jobId={job.id}
           budget={budget}
+          catalogItems={catalogItems}
           quoteOptions={quotes.map((q) => ({
             id: q.id,
             quoteNumber: q.quoteNumber,

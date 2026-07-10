@@ -81,9 +81,12 @@ model JobBudgetLine {
   actualQty       Decimal  @default(0) @db.Decimal(12, 2)
   actualUnitPrice Decimal  @default(0) @db.Decimal(12, 2)
   actualAmount    Decimal  @default(0) @db.Decimal(12, 2)
+  // Rolled from quotes / invoices linked via budgetLineId
+  quotedAmount    Decimal  @default(0) @db.Decimal(12, 2)
+  invoicedAmount  Decimal  @default(0) @db.Decimal(12, 2)
   notes           String?
   sortOrder       Int      @default(0)
-  // Optional source quote line (for re-import tracking)
+  // Optional source quote (import tracking)
   sourceQuoteId   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -92,6 +95,7 @@ model JobBudgetLine {
 
   @@index([jobId])
   @@index([category])
+  @@index([catalogItemId])
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +359,8 @@ model QuoteLineItem {
   quoteId       String
   // Optional — a line item can reference the catalog or be fully ad-hoc.
   catalogItemId String?
+  // Link back to the job budget line this quote row came from.
+  budgetLineId  String?
   description   String
   quantity      Decimal @default(1) @db.Decimal(12, 2)
   unitPrice     Decimal @default(0) @db.Decimal(12, 2)
@@ -363,12 +369,16 @@ model QuoteLineItem {
 
   quote       Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+
+  @@index([budgetLineId])
 }
 
 model InvoiceLineItem {
   id            String  @id @default(cuid())
   invoiceId     String
   catalogItemId String?
+  // Link back to the job budget line this invoice row came from.
+  budgetLineId  String?
   description   String
   quantity      Decimal @default(1) @db.Decimal(12, 2)
   unitPrice     Decimal @default(0) @db.Decimal(12, 2)
@@ -377,6 +387,8 @@ model InvoiceLineItem {
 
   invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+
+  @@index([budgetLineId])
 }
 
 model Payment {

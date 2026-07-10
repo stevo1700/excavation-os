@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 import { isApprovedQuoteStatus, parseLineItems } from "@/lib/finance";
@@ -13,6 +12,7 @@ export interface BudgetLineView {
   jobId: string;
   description: string;
   category: CatalogCategory;
+  catalogItemId: string | null;
   unit: string;
   budgetQty: number;
   budgetUnitPrice: number;
@@ -20,6 +20,8 @@ export interface BudgetLineView {
   actualQty: number;
   actualUnitPrice: number;
   actualAmount: number;
+  quotedAmount: number;
+  invoicedAmount: number;
   /** actual - budget (positive = over budget) */
   variance: number;
   /** actual / budget * 100 when budget > 0 */
@@ -42,12 +44,16 @@ export interface JobBudgetSnapshot {
   byCategory: BudgetCategoryRollup[];
   budgetTotal: number;
   actualTotal: number;
+  quotedTotal: number;
+  invoicedTotal: number;
   variance: number;
   percentUsed: number | null;
   lineCount: number;
 }
 
-function money(value: { toNumber(): number } | number | null | undefined): number {
+function money(
+  value: { toNumber(): number } | number | null | undefined,
+): number {
   if (value == null) return 0;
   if (typeof value === "number") return value;
   return value.toNumber();
@@ -69,6 +75,7 @@ function toView(row: {
   jobId: string;
   description: string;
   category: string;
+  catalogItemId: string | null;
   unit: string;
   budgetQty: { toNumber(): number } | number;
   budgetUnitPrice: { toNumber(): number } | number;
@@ -76,6 +83,8 @@ function toView(row: {
   actualQty: { toNumber(): number } | number;
   actualUnitPrice: { toNumber(): number } | number;
   actualAmount: { toNumber(): number } | number;
+  quotedAmount?: { toNumber(): number } | number | null;
+  invoicedAmount?: { toNumber(): number } | number | null;
   notes: string | null;
   sortOrder: number;
 }): BudgetLineView {
@@ -86,6 +95,7 @@ function toView(row: {
     jobId: row.jobId,
     description: row.description,
     category: asCategory(row.category),
+    catalogItemId: row.catalogItemId,
     unit: row.unit,
     budgetQty: money(row.budgetQty),
     budgetUnitPrice: money(row.budgetUnitPrice),
@@ -93,6 +103,8 @@ function toView(row: {
     actualQty: money(row.actualQty),
     actualUnitPrice: money(row.actualUnitPrice),
     actualAmount,
+    quotedAmount: money(row.quotedAmount),
+    invoicedAmount: money(row.invoicedAmount),
     variance: round2(actualAmount - budgetAmount),
     percentUsed:
       budgetAmount > 0 ? round2((actualAmount / budgetAmount) * 100) : null,
@@ -129,17 +141,17 @@ function rollup(lines: BudgetLineView[]): JobBudgetSnapshot {
     return b;
   }).filter((b) => b.lineCount > 0 || b.budgetAmount > 0 || b.actualAmount > 0);
 
-  const budgetTotal = round2(
-    lines.reduce((s, l) => s + l.budgetAmount, 0),
-  );
-  const actualTotal = round2(
-    lines.reduce((s, l) => s + l.actualAmount, 0),
-  );
+  const budgetTotal = round2(lines.reduce((s, l) => s + l.budgetAmount, 0));
+  const actualTotal = round2(lines.reduce((s, l) => s + l.actualAmount, 0));
+  const quotedTotal = round2(lines.reduce((s, l) => s + l.quotedAmount, 0));
+  const invoicedTotal = round2(lines.reduce((s, l) => s + l.invoicedAmount, 0));
   return {
     lines,
     byCategory,
     budgetTotal,
     actualTotal,
+    quotedTotal,
+    invoicedTotal,
     variance: round2(actualTotal - budgetTotal),
     percentUsed:
       budgetTotal > 0 ? round2((actualTotal / budgetTotal) * 100) : null,
@@ -151,12 +163,12 @@ function revalidateJob(jobId: string) {
   revalidatePath(`/dashboard/jobs/${jobId}`);
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/quotes");
+  revalidatePath("/dashboard/invoices");
 }
 
-/** Full budget vs actual snapshot for a job. */
-export async function getJobBudget(
-  jobId: string,
-): Promise<JobBudgetSnapshot> {
+/** Full budget snapshot for a job. */
+export async function getJobBudget(jobId: string): Promise<JobBudgetSnapshot> {
   try {
     const rows = await prisma.jobBudgetLine.findMany({
       where: { jobId },
@@ -170,6 +182,8 @@ export async function getJobBudget(
       byCategory: [],
       budgetTotal: 0,
       actualTotal: 0,
+      quotedTotal: 0,
+      invoicedTotal: 0,
       variance: 0,
       percentUsed: null,
       lineCount: 0,
@@ -181,6 +195,7 @@ export async function addBudgetLine(input: {
   jobId: string;
   description: string;
   category?: string;
+  catalogItemId?: string | null;
   unit?: string;
   budgetQty?: number;
   budgetUnitPrice?: number;
@@ -202,6 +217,7 @@ export async function addBudgetLine(input: {
       jobId: input.jobId,
       description: input.description.trim() || "Untitled",
       category: asCategory(input.category),
+      catalogItemId: input.catalogItemId ?? null,
       unit: input.unit?.trim() || "each",
       budgetQty,
       budgetUnitPrice,
@@ -215,6 +231,29 @@ export async function addBudgetLine(input: {
   });
   revalidateJob(input.jobId);
   return toView(created);
+}
+
+/** Add a budget line from a catalog item (qty optional, defaults 1). */
+export async function addBudgetLineFromCatalog(
+  jobId: string,
+  catalogItemId: string,
+  qty = 1,
+): Promise<BudgetLineView> {
+  const item = await prisma.catalogItem.findUnique({
+    where: { id: catalogItemId },
+  });
+  if (!item || !item.active) {
+    throw new Error("Catalog item not found or inactive.");
+  }
+  return addBudgetLine({
+    jobId,
+    description: item.name,
+    category: item.category,
+    catalogItemId: item.id,
+    unit: item.unit,
+    budgetQty: qty,
+    budgetUnitPrice: money(item.unitPrice),
+  });
 }
 
 export async function updateBudgetLine(
@@ -278,9 +317,7 @@ export async function deleteBudgetLine(id: string): Promise<void> {
 
 /**
  * Replace (or append) budget lines from a quote's line items.
- * Only ACCEPTED/APPROVED quotes by default; pass force for others.
- * Does not overwrite actuals on existing matching descriptions when append=false —
- * full replace clears all budget lines for the job first.
+ * Secondary path — primary is catalog → budget → quote.
  */
 export async function importBudgetFromQuote(input: {
   jobId: string;
@@ -308,13 +345,13 @@ export async function importBudgetFromQuote(input: {
     await prisma.jobBudgetLine.deleteMany({ where: { jobId: input.jobId } });
   }
 
-  // Prefer normalized catalog rows; fall back to legacy JSON line items.
   type Draft = {
     description: string;
     category: CatalogCategory;
     unit: string;
     qty: number;
     unitPrice: number;
+    catalogItemId: string | null;
   };
   let drafts: Draft[] = [];
 
@@ -325,6 +362,7 @@ export async function importBudgetFromQuote(input: {
       unit: row.catalogItem?.unit ?? "each",
       qty: money(row.quantity),
       unitPrice: money(row.unitPrice),
+      catalogItemId: row.catalogItemId,
     }));
   } else {
     drafts = parseLineItems(quote.lineItems).map((item) => ({
@@ -333,6 +371,7 @@ export async function importBudgetFromQuote(input: {
       unit: "each",
       qty: item.quantity,
       unitPrice: item.unitPrice,
+      catalogItemId: null,
     }));
   }
 
@@ -352,6 +391,7 @@ export async function importBudgetFromQuote(input: {
         jobId: input.jobId,
         description: d.description,
         category: d.category,
+        catalogItemId: d.catalogItemId,
         unit: d.unit,
         budgetQty: d.qty,
         budgetUnitPrice: d.unitPrice,
@@ -375,6 +415,13 @@ export async function addBudgetLineForm(
   jobId: string,
   formData: FormData,
 ): Promise<void> {
+  const catalogItemId = String(formData.get("catalogItemId") ?? "").trim();
+  if (catalogItemId) {
+    const qty = Number(formData.get("budgetQty")) || 1;
+    await addBudgetLineFromCatalog(jobId, catalogItemId, qty);
+    return;
+  }
+
   const description = String(formData.get("description") ?? "").trim();
   if (!description) return;
   await addBudgetLine({
@@ -399,18 +446,13 @@ export async function updateBudgetActualForm(
   });
 }
 
-export async function updateBudgetLineForm(
+export async function updateBudgetEstimateForm(
   lineId: string,
   formData: FormData,
 ): Promise<void> {
   await updateBudgetLine(lineId, {
-    description: String(formData.get("description") ?? ""),
-    category: String(formData.get("category") ?? "OTHER"),
-    unit: String(formData.get("unit") ?? "each"),
     budgetQty: Number(formData.get("budgetQty")) || 0,
     budgetUnitPrice: Number(formData.get("budgetUnitPrice")) || 0,
-    actualQty: Number(formData.get("actualQty")) || 0,
-    actualUnitPrice: Number(formData.get("actualUnitPrice")) || 0,
   });
 }
 
@@ -427,19 +469,19 @@ export async function importBudgetFromQuoteForm(
 ): Promise<void> {
   const quoteId = String(formData.get("quoteId") ?? "").trim();
   if (!quoteId) return;
-  const force = formData.get("force") === "on" || formData.get("force") === "true";
+  const force =
+    formData.get("force") === "on" || formData.get("force") === "true";
   try {
     await importBudgetFromQuote({ jobId, quoteId, mode: "replace", force });
   } catch (error) {
     logActionError("importBudgetFromQuoteForm", error);
-    // Surface as a soft no-op for form posts; UI shows empty if import failed.
     throw error;
   }
 }
 
 /**
- * Build a DRAFT quote from the job's current budget lines.
- * Primary workflow: catalog → budget on job → quote from budget.
+ * Build a DRAFT quote from the job's budget lines.
+ * Links each quote line to its budgetLineId and stamps quotedAmount on the budget.
  */
 export async function createQuoteFromBudget(jobId: string): Promise<string> {
   const job = await prisma.job.findUnique({ where: { id: jobId } });
@@ -488,6 +530,7 @@ export async function createQuoteFromBudget(jobId: string): Promise<string> {
     data: lines.map((line, i) => ({
       quoteId: quote.id,
       catalogItemId: line.catalogItemId,
+      budgetLineId: line.id,
       description: line.description,
       quantity: line.budgetQty,
       unitPrice: line.budgetUnitPrice,
@@ -496,8 +539,25 @@ export async function createQuoteFromBudget(jobId: string): Promise<string> {
     })),
   });
 
-  revalidatePath("/dashboard/quotes");
-  revalidatePath(`/dashboard/jobs/${jobId}`);
+  // Stamp quoted amount on each budget line (replace with this quote's amounts)
+  await Promise.all(
+    lines.map((line) =>
+      prisma.jobBudgetLine.update({
+        where: { id: line.id },
+        data: { quotedAmount: line.budgetAmount },
+      }),
+    ),
+  );
+
+  // Move job toward quoting if still estimating
+  if (["ESTIMATING", "estimating"].includes(job.status)) {
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: "QUOTING" },
+    });
+  }
+
+  revalidateJob(jobId);
   revalidatePath(`/dashboard/quotes/${quote.id}`);
   return quote.id;
 }
@@ -509,4 +569,87 @@ export async function createQuoteFromBudgetForm(
   const { redirect } = await import("next/navigation");
   const quoteId = await createQuoteFromBudget(jobId);
   redirect(`/dashboard/quotes/${quoteId}`);
+}
+
+/**
+ * Build a DRAFT invoice from the job's budget lines.
+ * Links invoice lines to budgetLineId and stamps invoicedAmount.
+ */
+export async function createInvoiceFromBudget(jobId: string): Promise<string> {
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) throw new Error("Job not found.");
+
+  const lines = await prisma.jobBudgetLine.findMany({
+    where: { jobId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  if (lines.length === 0) {
+    throw new Error("Add budget lines before creating an invoice.");
+  }
+
+  const items = lines.map((line) => ({
+    description: line.description,
+    quantity: money(line.budgetQty),
+    unitPrice: money(line.budgetUnitPrice),
+    lineTotal: money(line.budgetAmount),
+  }));
+  const subtotal = round2(items.reduce((s, i) => s + i.lineTotal, 0));
+
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const count = await prisma.invoice.count({
+    where: { invoiceNumber: { startsWith: prefix } },
+  });
+  const invoiceNumber = `${prefix}${String(count + 1).padStart(4, "0")}`;
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      jobId,
+      customerId: job.customerId,
+      invoiceNumber,
+      status: "DRAFT",
+      lineItems: items as unknown as object,
+      subtotal,
+      taxRate: 0,
+      taxAmount: 0,
+      total: subtotal,
+      amountPaid: 0,
+      notes: "Generated from job budget lines.",
+    },
+  });
+
+  await prisma.invoiceLineItem.createMany({
+    data: lines.map((line, i) => ({
+      invoiceId: invoice.id,
+      catalogItemId: line.catalogItemId,
+      budgetLineId: line.id,
+      description: line.description,
+      quantity: line.budgetQty,
+      unitPrice: line.budgetUnitPrice,
+      amount: line.budgetAmount,
+      sortOrder: i,
+    })),
+  });
+
+  await Promise.all(
+    lines.map((line) =>
+      prisma.jobBudgetLine.update({
+        where: { id: line.id },
+        data: { invoicedAmount: line.budgetAmount },
+      }),
+    ),
+  );
+
+  revalidateJob(jobId);
+  revalidatePath(`/dashboard/invoices/${invoice.id}`);
+  return invoice.id;
+}
+
+export async function createInvoiceFromBudgetForm(
+  jobId: string,
+  _formData?: FormData,
+): Promise<void> {
+  const { redirect } = await import("next/navigation");
+  const invoiceId = await createInvoiceFromBudget(jobId);
+  redirect(`/dashboard/invoices/${invoiceId}`);
 }
