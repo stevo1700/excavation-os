@@ -20,14 +20,8 @@ export async function PATCH(
   if (validated.error) return validated.error;
 
   try {
-    const machine = await updateEquipmentStatus(params.id, validated.input.status);
-    if (!machine) {
-      return NextResponse.json(
-        { error: "Equipment not found" },
-        { status: 404 },
-      );
-    }
-    return NextResponse.json(machine);
+    await updateEquipmentStatus(params.id, validated.input.status);
+    return NextResponse.json({ ok: true });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return NextResponse.json(
