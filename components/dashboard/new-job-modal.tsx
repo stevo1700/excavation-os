@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -8,16 +9,22 @@ import {
   Input,
   PrimaryButton,
   SecondaryButton,
+  Select,
   Textarea,
 } from "@/components/ui/form";
+import { JOB_STATUS_OPTIONS } from "@/lib/job-status";
+import { createJobFromModal } from "@/lib/actions/jobs";
 
-/**
- * "New job" trigger + modal. UI only — submitting just closes the dialog; no
- * data is persisted in this mock build.
- */
+/** New job modal — persists to the database. */
 export function NewJobModal() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const close = () => setOpen(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const close = () => {
+    setOpen(false);
+    setError(null);
+  };
 
   return (
     <>
@@ -34,60 +41,111 @@ export function NewJobModal() {
         open={open}
         onClose={close}
         title="New job"
-        description="Set up a new job site. This is a demo form — nothing is saved."
+        description="Create a job. Start in Estimating to build a budget, then quote from it."
         footer={
           <>
-            <SecondaryButton onClick={close}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={close}>Create job</PrimaryButton>
+            <SecondaryButton type="button" onClick={close} disabled={pending}>
+              Cancel
+            </SecondaryButton>
+            <PrimaryButton type="submit" form="new-job-form" disabled={pending}>
+              {pending ? "Creating…" : "Create job"}
+            </PrimaryButton>
           </>
         }
       >
         <form
+          id="new-job-form"
           className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            close();
+          action={(formData) => {
+            setError(null);
+            startTransition(async () => {
+              try {
+                const id = await createJobFromModal(formData);
+                close();
+                router.push(`/dashboard/jobs/${id}`);
+                router.refresh();
+              } catch (e) {
+                setError(
+                  e instanceof Error ? e.message : "Could not create job.",
+                );
+              }
+            });
           }}
         >
-          <Field label="Job name" htmlFor="job-name">
-            <Input id="job-name" placeholder="e.g. Riverside foundation dig" />
+          <Field label="Job name" htmlFor="modal-job-name">
+            <Input
+              id="modal-job-name"
+              name="name"
+              required
+              placeholder="e.g. Riverside foundation dig"
+            />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Client" htmlFor="job-client">
-              <Input id="job-client" placeholder="e.g. Hollis Development" />
-            </Field>
-            <Field label="Site address" htmlFor="job-site">
-              <Input id="job-site" placeholder="e.g. 418 Riverside Dr" />
-            </Field>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Start date" htmlFor="job-start">
-              <Input id="job-start" type="date" />
-            </Field>
-            <Field label="Est. completion" htmlFor="job-due">
-              <Input id="job-due" type="date" />
-            </Field>
-            <Field label="Value (USD)" htmlFor="job-value">
+            <Field label="Client" htmlFor="modal-job-client">
               <Input
-                id="job-value"
-                type="number"
-                min={0}
-                placeholder="248000"
+                id="modal-job-client"
+                name="client"
+                required
+                placeholder="e.g. Hollis Development"
+              />
+            </Field>
+            <Field label="Site address" htmlFor="modal-job-site">
+              <Input
+                id="modal-job-site"
+                name="siteAddress"
+                required
+                placeholder="e.g. 418 Riverside Dr"
               />
             </Field>
           </div>
 
-          <Field label="Description" htmlFor="job-desc">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Status" htmlFor="modal-job-status">
+              <Select
+                id="modal-job-status"
+                name="status"
+                defaultValue="ESTIMATING"
+              >
+                {JOB_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Start date" htmlFor="modal-job-start">
+              <Input id="modal-job-start" name="startDate" type="date" />
+            </Field>
+            <Field label="Est. completion" htmlFor="modal-job-due">
+              <Input id="modal-job-due" name="estCompletion" type="date" />
+            </Field>
+          </div>
+
+          <Field label="Contract value (USD)" htmlFor="modal-job-value">
+            <Input
+              id="modal-job-value"
+              name="value"
+              type="number"
+              min={0}
+              placeholder="248000"
+            />
+          </Field>
+
+          <Field label="Description" htmlFor="modal-job-desc">
             <Textarea
-              id="job-desc"
+              id="modal-job-desc"
+              name="description"
               rows={3}
               placeholder="Scope of work, site conditions, special requirements…"
             />
           </Field>
-          {/* Allow Enter-to-submit without a visible submit button. */}
-          <button type="submit" className="hidden" aria-hidden />
+
+          {error ? (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {error}
+            </p>
+          ) : null}
         </form>
       </Modal>
     </>

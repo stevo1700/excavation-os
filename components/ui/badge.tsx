@@ -32,6 +32,12 @@ export function Badge({
 /** Map a domain status string to a badge tone, so callers don't repeat the mapping. */
 export function statusTone(status: string): Tone {
   switch (status) {
+    case "estimating":
+    case "quoting":
+      return "amber";
+    case "quoted":
+    case "scheduled":
+      return "neutral";
     case "in_progress":
     case "in_use":
     case "on_site":
@@ -39,8 +45,6 @@ export function statusTone(status: string): Tone {
     case "completed":
     case "available":
       return "green";
-    case "scheduled":
-      return "amber";
     case "on_hold":
     case "maintenance":
       return "red";

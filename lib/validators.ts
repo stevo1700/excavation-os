@@ -22,6 +22,9 @@ import type {
 } from "@/lib/types";
 
 export const JOB_STATUSES: JobStatus[] = [
+  "estimating",
+  "quoting",
+  "quoted",
   "scheduled",
   "in_progress",
   "on_hold",

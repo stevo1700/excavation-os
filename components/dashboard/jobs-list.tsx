@@ -12,8 +12,11 @@ import type { Job, JobStatus } from "@/lib/types";
 import { formatCurrency, formatDate, jobColor } from "@/lib/utils";
 
 const statuses: JobStatus[] = [
-  "in_progress",
+  "estimating",
+  "quoting",
+  "quoted",
   "scheduled",
+  "in_progress",
   "on_hold",
   "completed",
 ];

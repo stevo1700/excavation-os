@@ -20,7 +20,10 @@ const prisma = new PrismaClient();
 // --- mappings: UI string unions -> DB text values -----------------------------
 
 const jobStatusMap: Record<MockJobStatus, string> = {
-  scheduled: "PENDING",
+  estimating: "ESTIMATING",
+  quoting: "QUOTING",
+  quoted: "QUOTED",
+  scheduled: "SCHEDULED",
   in_progress: "ACTIVE",
   on_hold: "ON_HOLD",
   completed: "COMPLETE",

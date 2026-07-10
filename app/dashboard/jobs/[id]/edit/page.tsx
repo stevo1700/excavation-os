@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 
 // Map the UI status union back to the Prisma enum value for the status select.
 const uiToPrismaStatus: Record<JobStatus, string> = {
-  scheduled: "QUOTED",
+  estimating: "ESTIMATING",
+  quoting: "QUOTING",
+  quoted: "QUOTED",
+  scheduled: "SCHEDULED",
   in_progress: "ACTIVE",
   on_hold: "ON_HOLD",
   completed: "COMPLETE",

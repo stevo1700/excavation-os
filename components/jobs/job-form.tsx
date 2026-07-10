@@ -1,24 +1,18 @@
 import Link from "next/link";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { JOB_STATUS_OPTIONS } from "@/lib/job-status";
 
 export interface JobFormDefaults {
   name?: string;
   client?: string;
   siteAddress?: string;
-  /** Prisma JobStatus value, e.g. "ACTIVE". */
+  /** Prisma / DB status token, e.g. "ESTIMATING". */
   status?: string;
   startDate?: string;
   estCompletion?: string;
   value?: number;
   description?: string;
 }
-
-const statusOptions: { value: string; label: string }[] = [
-  { value: "QUOTED", label: "Quoted" },
-  { value: "ACTIVE", label: "Active" },
-  { value: "ON_HOLD", label: "On hold" },
-  { value: "COMPLETE", label: "Complete" },
-];
 
 /**
  * Shared create/edit job form. Renders a native form whose submit invokes the
@@ -73,9 +67,9 @@ export function JobForm({
           <Select
             id="status"
             name="status"
-            defaultValue={defaults.status ?? "QUOTED"}
+            defaultValue={defaults.status ?? "ESTIMATING"}
           >
-            {statusOptions.map((option) => (
+            {JOB_STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -120,6 +114,12 @@ export function JobForm({
           placeholder="Scope of work, site conditions, key milestones…"
         />
       </Field>
+
+      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Tip: start in <strong>Estimating</strong>, build the budget on the job
+        page, then move to <strong>Quoting</strong> and create a quote from the
+        budget.
+      </p>
 
       <div className="flex items-center gap-3 pt-1">
         <button

@@ -5,23 +5,11 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
 import type { Job, JobColor, JobStatus } from "@/lib/types";
-
-// The DB stores status as a free-text enum whose exact values weren't
-// introspectable; map tolerantly onto the UI's status union.
-function toUiStatus(status: string): JobStatus {
-  const s = status.toLowerCase();
-  if (s.includes("progress") || s === "active") return "in_progress";
-  if (s.includes("hold")) return "on_hold";
-  if (s.includes("complete") || s.includes("done")) return "completed";
-  return "scheduled";
-}
-
-const progressForStatus: Record<JobStatus, number> = {
-  scheduled: 0,
-  in_progress: 50,
-  on_hold: 25,
-  completed: 100,
-};
+import {
+  progressForStatus,
+  toDbStatus,
+  toUiStatus,
+} from "@/lib/job-status";
 
 // The DB has no per-job color column, so derive a stable one from the id.
 const JOB_COLORS: JobColor[] = [
@@ -121,7 +109,9 @@ function field(formData: FormData, key: string): string {
 }
 
 function parseDate(value: string): Date | null {
-  return value ? new Date(value) : null;
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function parseJobForm(formData: FormData) {
@@ -130,7 +120,7 @@ function parseJobForm(formData: FormData) {
     name: field(formData, "name"),
     client: field(formData, "client"),
     address: field(formData, "siteAddress") || null,
-    status: field(formData, "status") || "ACTIVE",
+    status: toDbStatus(field(formData, "status") || "ESTIMATING"),
     startDate: parseDate(field(formData, "startDate")),
     endDate: parseDate(field(formData, "estCompletion")),
     contractValue: Number.isFinite(value) ? value : 0,
@@ -140,11 +130,33 @@ function parseJobForm(formData: FormData) {
 
 // --- mutations ----------------------------------------------------------------
 
-/** Create a new job, then redirect to the jobs list. */
+/** Create a new job, then open its hub page (budget / estimate lives there). */
 export async function createJob(formData: FormData): Promise<void> {
-  await prisma.job.create({ data: parseJobForm(formData) });
+  const data = parseJobForm(formData);
+  if (!data.name) throw new Error("Job name is required.");
+  if (!data.client) throw new Error("Client is required.");
+
+  const job = await prisma.job.create({ data });
   revalidatePath("/dashboard/jobs");
-  redirect("/dashboard/jobs");
+  revalidatePath("/dashboard");
+  redirect(`/dashboard/jobs/${job.id}`);
+}
+
+/** Modal-friendly create — returns the new job id (no redirect). */
+export async function createJobFromModal(formData: FormData): Promise<string> {
+  const data = parseJobForm(formData);
+  if (!data.name) throw new Error("Job name is required.");
+  if (!data.client) throw new Error("Client is required.");
+
+  try {
+    const job = await prisma.job.create({ data });
+    revalidatePath("/dashboard/jobs");
+    revalidatePath("/dashboard");
+    return job.id;
+  } catch (error) {
+    logActionError("createJobFromModal", error);
+    throw new Error("Database error creating job. Try again.");
+  }
 }
 
 /** Update an existing job, then redirect to its detail page. */
@@ -222,10 +234,13 @@ export async function updateJobScheduleDate(
 // UI status union → the DB's free-text status token. `toUiStatus` maps these
 // back, so a value written here round-trips to the same UI status.
 const dbJobStatus: Record<JobStatus, string> = {
+  estimating: "ESTIMATING",
+  quoting: "QUOTING",
+  quoted: "QUOTED",
   scheduled: "SCHEDULED",
   in_progress: "ACTIVE",
   on_hold: "ON_HOLD",
-  completed: "COMPLETED",
+  completed: "COMPLETE",
 };
 
 /** Fields accepted when creating or updating a job over the JSON API. */
@@ -254,7 +269,7 @@ export async function createJobRecord(input: JobWriteInput): Promise<Job> {
     data: {
       name: input.name ?? "",
       client: input.client ?? "",
-      status: input.status ? dbJobStatus[input.status] : "ACTIVE",
+      status: input.status ? dbJobStatus[input.status] : "ESTIMATING",
       contractValue: input.value ?? 0,
       startDate: parseDateInput(input.startDate),
       endDate: parseDateInput(input.dueDate),

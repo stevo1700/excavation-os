@@ -1,8 +1,14 @@
 // Domain types for Excavation OS. This is a standalone client dashboard —
-// all data is mocked locally (see lib/data.ts and lib/mock-reports.ts); there
-// are no external integrations.
+// data is loaded from Postgres via Prisma when configured.
 
-export type JobStatus = "scheduled" | "in_progress" | "on_hold" | "completed";
+export type JobStatus =
+  | "estimating"
+  | "quoting"
+  | "quoted"
+  | "scheduled"
+  | "in_progress"
+  | "on_hold"
+  | "completed";
 
 /**
  * A stable color key assigned to each job. The same key is used everywhere the
