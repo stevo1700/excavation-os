@@ -8,7 +8,7 @@ RUN apk add --no-cache openssl
 
 # Copy package files first for better caching
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma
