@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Mail, MapPin, Pencil, Phone, User } from "lucide-react";
+import { ArrowLeft, Mail, MapPin, Pencil, Phone, Plus, User } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { CustomerTabs } from "@/components/customers/customer-tabs";
@@ -39,13 +39,22 @@ export default async function CustomerDetailPage({
             .join(" · ") || undefined
         }
         action={
-          <Link
-            href={`/dashboard/customers/${customer.id}/edit`}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/dashboard/jobs/new?customerId=${customer.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-surface-900 transition-colors hover:bg-brand-400"
+            >
+              <Plus className="h-4 w-4" />
+              Add job
+            </Link>
+            <Link
+              href={`/dashboard/customers/${customer.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Link>
+          </div>
         }
       />
 

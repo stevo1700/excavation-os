@@ -116,6 +116,7 @@ function parseDate(value: string): Date | null {
 
 function parseJobForm(formData: FormData) {
   const value = Number.parseInt(field(formData, "value"), 10);
+  const customerId = field(formData, "customerId") || null;
   return {
     name: field(formData, "name"),
     client: field(formData, "client"),
@@ -125,6 +126,7 @@ function parseJobForm(formData: FormData) {
     endDate: parseDate(field(formData, "estCompletion")),
     contractValue: Number.isFinite(value) ? value : 0,
     description: field(formData, "description") || null,
+    customerId,
   };
 }
 

@@ -59,6 +59,8 @@ model Job {
   portalTokens     ClientPortalToken[]
   quotes           Quote[]
   invoices         Invoice[]
+  contracts        JobContract[]
+  tasks            JobTask[]
 }
 
 // ---------------------------------------------------------------------------
@@ -452,4 +454,59 @@ model TelematicsAsset {
   connection TelematicsConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@unique([oem, externalAssetId])
+}
+
+
+// ---------------------------------------------------------------------------
+// Contract templates — reusable agreement text applied to jobs.
+// Placeholders: {{job_name}} {{client}} {{site}} {{value}} {{date}} {{status}}
+// ---------------------------------------------------------------------------
+
+model ContractTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  // Full contract body (plain text / markdown). Supports {{placeholders}}.
+  body        String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contracts JobContract[]
+}
+
+model JobContract {
+  id         String   @id @default(cuid())
+  jobId      String
+  templateId String?
+  title      String
+  // Filled body after placeholder merge (editable after apply)
+  body       String
+  // DRAFT / SENT / SIGNED / VOID
+  status     String   @default("DRAFT")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  job      Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  template ContractTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+  @@index([templateId])
+}
+
+
+// Lightweight to-do / tasks on a job (JobTread-style tasks tab)
+model JobTask {
+  id        String    @id @default(cuid())
+  jobId     String
+  title     String
+  done      Boolean   @default(false)
+  dueDate   DateTime? @db.Date
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
 }

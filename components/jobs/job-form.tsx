@@ -12,6 +12,7 @@ export interface JobFormDefaults {
   estCompletion?: string;
   value?: number;
   description?: string;
+  customerId?: string;
 }
 
 /**
@@ -31,6 +32,9 @@ export function JobForm({
 }) {
   return (
     <form action={action} className="max-w-2xl space-y-5">
+      {defaults.customerId ? (
+        <input type="hidden" name="customerId" value={defaults.customerId} />
+      ) : null}
       <Field label="Job name" htmlFor="name">
         <Input
           id="name"
