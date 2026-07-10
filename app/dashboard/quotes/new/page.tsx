@@ -7,7 +7,11 @@ export const metadata = { title: "New Quote" };
 
 export const dynamic = "force-dynamic";
 
-export default async function NewQuotePage() {
+export default async function NewQuotePage({
+  searchParams,
+}: {
+  searchParams: { jobId?: string };
+}) {
   const [jobs, customers] = await Promise.all([
     getJobOptions(),
     getCustomers(),
@@ -22,6 +26,7 @@ export default async function NewQuotePage() {
       <QuoteForm
         jobs={jobs}
         customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+        defaultJobId={searchParams.jobId}
         action={createQuote}
       />
     </div>

@@ -11,15 +11,18 @@ export function InvoiceForm({
   jobs,
   customers,
   quotes,
+  defaultJobId,
   action,
 }: {
   jobs: JobOption[];
   customers: CustomerOption[];
   quotes: QuoteOption[];
+  defaultJobId?: string;
   action: (formData: FormData) => void | Promise<void>;
 }) {
-  const [jobId, setJobId] = useState(jobs[0]?.id ?? "");
-  const [customerId, setCustomerId] = useState(jobs[0]?.customerId ?? "");
+  const initialJob = jobs.find((j) => j.id === defaultJobId) ?? jobs[0];
+  const [jobId, setJobId] = useState(initialJob?.id ?? "");
+  const [customerId, setCustomerId] = useState(initialJob?.customerId ?? "");
 
   function onJobChange(value: string) {
     setJobId(value);

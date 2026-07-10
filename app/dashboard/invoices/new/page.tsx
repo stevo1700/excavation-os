@@ -8,7 +8,11 @@ export const metadata = { title: "New Invoice" };
 
 export const dynamic = "force-dynamic";
 
-export default async function NewInvoicePage() {
+export default async function NewInvoicePage({
+  searchParams,
+}: {
+  searchParams: { jobId?: string };
+}) {
   const [jobs, customers, quotes] = await Promise.all([
     getJobOptions(),
     getCustomers(),
@@ -25,6 +29,7 @@ export default async function NewInvoicePage() {
         jobs={jobs}
         customers={customers.map((c) => ({ id: c.id, name: c.name }))}
         quotes={quotes}
+        defaultJobId={searchParams.jobId}
         action={createInvoice}
       />
     </div>

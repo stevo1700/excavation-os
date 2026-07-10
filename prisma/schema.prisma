@@ -50,6 +50,7 @@ model Job {
   customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
   equipment        Equipment[]
   crew             CrewMember[]
+  assignments      JobAssignment[]
   dailyReports     DailyReport[]
   notes            Note[]
   activity         ActivityEvent[]
@@ -57,6 +58,32 @@ model Job {
   portalTokens     ClientPortalToken[]
   quotes           Quote[]
   invoices         Invoice[]
+}
+
+// ---------------------------------------------------------------------------
+// Job assignments — dated history of crew / equipment on a job.
+// Open assignment = endDate is null. CrewMember.jobId / Equipment.jobId still
+// hold the *current* assignment for quick filters; this table is the ledger.
+// ---------------------------------------------------------------------------
+
+model JobAssignment {
+  id           String    @id @default(cuid())
+  jobId        String
+  // CREW | EQUIPMENT
+  resourceType String
+  // CrewMember.id or Equipment.id (soft link — no FK across two tables)
+  resourceId   String
+  startDate    DateTime  @db.Date
+  endDate      DateTime? @db.Date
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([resourceType, resourceId])
+  @@index([endDate])
 }
 
 model Equipment {
