@@ -16,16 +16,17 @@ export async function GET(
 ) {
   const machine = await prisma.equipment.findUnique({
     where: { id: params.id },
-    select: { assetTag: true, qrUrl: true, qrSvg: true },
+    select: { id: true, name: true },
   });
 
   if (!machine) {
     return NextResponse.json({ error: "Equipment not found" }, { status: 404 });
   }
 
-  const svg =
-    machine.qrSvg ??
-    (await generateQrSvg(machine.qrUrl || qrUrlForTag(machine.assetTag)));
+  const name = machine.name ?? machine.id;
+  const url = `https://excavation-os.up.railway.app/equipment/${machine.id}`;
+
+  const svg = await generateQrSvg(url);
 
   return new NextResponse(svg, {
     headers: {
