@@ -34,8 +34,12 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
-export function formatDate(iso: string): string {
-  return dateFormatter.format(new Date(iso));
+/** Safe date label — empty/invalid inputs return "—" instead of crashing. */
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso || !String(iso).trim()) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return dateFormatter.format(d);
 }
 
 const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -43,8 +47,11 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
-export function formatShortDate(iso: string): string {
-  return shortDateFormatter.format(new Date(iso));
+export function formatShortDate(iso: string | null | undefined): string {
+  if (!iso || !String(iso).trim()) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return shortDateFormatter.format(d);
 }
 
 /** Turn a snake_case enum value into a readable label, e.g. "in_progress" → "In progress". */
@@ -53,14 +60,12 @@ export function humanize(value: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-/**
- * Relative "time ago" label for activity timestamps, computed against a fixed
- * reference date so the mocked feed reads consistently in the demo.
- */
-const NOW_REFERENCE = new Date("2026-06-29T16:00:00");
-
-export function timeAgo(iso: string, now: Date = NOW_REFERENCE): string {
-  const diffMs = now.getTime() - new Date(iso).getTime();
+/** Relative "time ago" label for activity timestamps. */
+export function timeAgo(iso: string, now: Date = new Date()): string {
+  if (!iso || !String(iso).trim()) return "—";
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return "—";
+  const diffMs = now.getTime() - then.getTime();
   const minutes = Math.round(diffMs / 60000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;

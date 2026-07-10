@@ -105,7 +105,7 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
                     </div>
                     <div className="flex items-center gap-2 text-slate-600">
                       <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                      <span>Due {formatDate(job.dueDate)}</span>
+                      <span>{job.dueDate ? `Due ${formatDate(job.dueDate)}` : `Start ${formatDate(job.startDate)}`}</span>
                     </div>
                   </dl>
 
