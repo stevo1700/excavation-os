@@ -16,6 +16,26 @@ export function JobFinancialStrip({
       href: null as string | null,
     },
     {
+      label: "Budget",
+      value: formatCurrency(financials.budgetTotal),
+      href: null,
+      sub: financials.budgetTotal > 0 ? "job estimate" : "add below",
+    },
+    {
+      label: "Actual cost",
+      value: formatCurrency(financials.actualTotal),
+      href: null,
+      sub:
+        financials.budgetTotal > 0
+          ? financials.budgetVariance > 0
+            ? "over budget"
+            : financials.budgetVariance < 0
+              ? "under budget"
+              : "on budget"
+          : undefined,
+      emphasize: financials.budgetVariance > 0,
+    },
+    {
       label: "Quoted",
       value: formatCurrency(financials.quotedTotal),
       href: `/dashboard/quotes?jobId=${jobId}`,
@@ -28,22 +48,10 @@ export function JobFinancialStrip({
       sub: `${financials.invoiceCount} invoice${financials.invoiceCount === 1 ? "" : "s"}`,
     },
     {
-      label: "Paid",
-      value: formatCurrency(financials.paidTotal),
-      href: null,
-    },
-    {
       label: "Outstanding",
       value: formatCurrency(financials.outstanding),
       href: null,
       emphasize: financials.outstanding > 0,
-    },
-    {
-      label: "Labor hours",
-      value: financials.laborHours.toLocaleString(undefined, {
-        maximumFractionDigits: 1,
-      }),
-      href: `/dashboard/timesheets?jobId=${jobId}`,
     },
   ];
 

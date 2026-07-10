@@ -4,7 +4,6 @@ import { getJobs } from "./jobs";
 import { getEquipment } from "./equipment";
 import { getCrew } from "./crew";
 import { getActivity } from "./activity";
-import { weeklyRevenue as mockRevenue } from "@/lib/data";
 import type { Job, Kpi, RevenuePoint } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -192,8 +191,7 @@ function computeWeeklyRevenue(jobs: Job[]): RevenuePoint[] | null {
 
 /**
  * Fetch all dashboard data in one call. KPIs and weekly revenue are derived
- * from the live job/equipment/crew arrays returned by the DB (or the bundled
- * mock data when no database is reachable).
+ * from the live job/equipment/crew arrays returned by the DB (— empty when the DB has no rows).
  */
 export async function getDashboardData(): Promise<DashboardData> {
   const [jobs, equipment, crew, activity] = await Promise.all([
@@ -204,7 +202,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   ]);
 
   const kpis = computeKpis(jobs, equipment, crew);
-  const revenue = computeWeeklyRevenue(jobs) ?? mockRevenue;
+  const revenue = computeWeeklyRevenue(jobs) ?? [];
 
   return { jobs, equipment, crew, activity, kpis, weeklyRevenue: revenue };
 }

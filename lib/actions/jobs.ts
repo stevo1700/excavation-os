@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
-import { jobs as mockJobs } from "@/lib/data";
 import type { Job, JobColor, JobStatus } from "@/lib/types";
 
 // The DB stores status as a free-text enum whose exact values weren't
@@ -96,7 +95,7 @@ export async function getJobs(): Promise<Job[]> {
     return rows.map(toUiJob);
   } catch (error) {
     logActionError("getJobs", error);
-    return mockJobs;
+    return [];
   }
 }
 
@@ -111,7 +110,7 @@ export async function getJob(id: string): Promise<Job | null> {
     return toUiJob(job);
   } catch (error) {
     logActionError("getJob", error);
-    return mockJobs.find((job) => job.id === id) ?? null;
+    return null;
   }
 }
 

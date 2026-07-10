@@ -1,6 +1,7 @@
 import {
   addBudgetLineForm,
   deleteBudgetLineForm,
+  createQuoteFromBudgetForm,
   importBudgetFromQuoteForm,
   updateBudgetActualForm,
   type JobBudgetSnapshot,
@@ -104,11 +105,22 @@ export function JobBudgetPanel({
           title="Budget lines"
           description={
             budget.lineCount === 0
-              ? "No budget yet — add lines or import from a quote"
-              : `${budget.lineCount} line${budget.lineCount === 1 ? "" : "s"}`
+              ? "Build the budget first — then create a quote from it"
+              : `${budget.lineCount} line${budget.lineCount === 1 ? "" : "s"} · edit actuals as costs land`
           }
           action={
-            quoteOptions.length > 0 ? (
+            <div className="flex flex-wrap items-end gap-2">
+              {budget.lineCount > 0 ? (
+                <form action={createQuoteFromBudgetForm.bind(null, jobId)}>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-surface-900 hover:bg-brand-400"
+                  >
+                    Create quote from budget
+                  </button>
+                </form>
+              ) : null}
+              {quoteOptions.length > 0 ? (
               <form action={importQuote} className="flex flex-wrap items-end gap-2">
                 <label className="text-xs font-medium text-slate-600">
                   Import quote
@@ -139,7 +151,8 @@ export function JobBudgetPanel({
                   Import (replace)
                 </button>
               </form>
-            ) : null
+              ) : null}
+            </div>
           }
         />
         <CardBody className="space-y-4">

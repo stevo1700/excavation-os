@@ -436,3 +436,77 @@ export async function importBudgetFromQuoteForm(
     throw error;
   }
 }
+
+/**
+ * Build a DRAFT quote from the job's current budget lines.
+ * Primary workflow: catalog → budget on job → quote from budget.
+ */
+export async function createQuoteFromBudget(jobId: string): Promise<string> {
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) throw new Error("Job not found.");
+
+  const lines = await prisma.jobBudgetLine.findMany({
+    where: { jobId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  if (lines.length === 0) {
+    throw new Error("Add budget lines before creating a quote.");
+  }
+
+  const items = lines.map((line) => ({
+    description: line.description,
+    quantity: money(line.budgetQty),
+    unitPrice: money(line.budgetUnitPrice),
+    lineTotal: money(line.budgetAmount),
+  }));
+  const subtotal = round2(items.reduce((s, i) => s + i.lineTotal, 0));
+
+  const year = new Date().getFullYear();
+  const prefix = `QUO-${year}-`;
+  const count = await prisma.quote.count({
+    where: { quoteNumber: { startsWith: prefix } },
+  });
+  const quoteNumber = `${prefix}${String(count + 1).padStart(4, "0")}`;
+
+  const quote = await prisma.quote.create({
+    data: {
+      title: `Budget quote — ${job.name}`,
+      jobId,
+      customerId: job.customerId,
+      quoteNumber,
+      status: "DRAFT",
+      lineItems: items as unknown as object,
+      subtotal,
+      taxRate: 0,
+      taxAmount: 0,
+      total: subtotal,
+      notes: "Generated from job budget lines.",
+    },
+  });
+
+  await prisma.quoteLineItem.createMany({
+    data: lines.map((line, i) => ({
+      quoteId: quote.id,
+      catalogItemId: line.catalogItemId,
+      description: line.description,
+      quantity: line.budgetQty,
+      unitPrice: line.budgetUnitPrice,
+      amount: line.budgetAmount,
+      sortOrder: i,
+    })),
+  });
+
+  revalidatePath("/dashboard/quotes");
+  revalidatePath(`/dashboard/jobs/${jobId}`);
+  revalidatePath(`/dashboard/quotes/${quote.id}`);
+  return quote.id;
+}
+
+export async function createQuoteFromBudgetForm(
+  jobId: string,
+  _formData?: FormData,
+): Promise<void> {
+  const { redirect } = await import("next/navigation");
+  const quoteId = await createQuoteFromBudget(jobId);
+  redirect(`/dashboard/quotes/${quoteId}`);
+}

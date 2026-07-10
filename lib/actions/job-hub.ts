@@ -9,6 +9,9 @@ import type { Job } from "@/lib/types";
 
 export interface JobFinancialSnapshot {
   contractValue: number;
+  budgetTotal: number;
+  actualTotal: number;
+  budgetVariance: number;
   quotedTotal: number;
   invoicedTotal: number;
   paidTotal: number;
@@ -134,6 +137,9 @@ export async function getJobHub(jobId: string): Promise<JobHubData | null> {
         : null,
       financials: {
         contractValue: job.value,
+        budgetTotal: budget.budgetTotal,
+        actualTotal: budget.actualTotal,
+        budgetVariance: budget.variance,
         quotedTotal: quoted,
         invoicedTotal,
         paidTotal,
@@ -165,6 +171,9 @@ export async function getJobHub(jobId: string): Promise<JobHubData | null> {
       customer: null,
       financials: {
         contractValue: job.value,
+        budgetTotal: 0,
+        actualTotal: 0,
+        budgetVariance: 0,
         quotedTotal: 0,
         invoicedTotal: 0,
         paidTotal: 0,

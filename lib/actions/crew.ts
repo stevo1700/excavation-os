@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
-import { crew as mockCrew } from "@/lib/data";
 import type { CrewMember, CrewRole, CrewStatus } from "@/lib/types";
 
 // The DB has no crew status column for the roster view — derive one from
@@ -54,7 +53,7 @@ export async function getCrew(): Promise<CrewMember[]> {
     return rows.map(toUiCrew);
   } catch (error) {
     logActionError("getCrew", error);
-    return mockCrew;
+    return [];
   }
 }
 

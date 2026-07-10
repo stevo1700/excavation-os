@@ -1,7 +1,6 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { activity as mockActivity } from "@/lib/data";
 import type { ActivityItem, ActivityKind } from "@/lib/types";
 
 /**
@@ -28,6 +27,6 @@ export async function getActivity(limit = 20): Promise<ActivityItem[]> {
       };
     });
   } catch {
-    return mockActivity.slice(0, limit);
+    return [];
   }
 }

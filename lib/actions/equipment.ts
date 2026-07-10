@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { logActionError } from "@/lib/log-error";
-import { equipment as mockEquipment } from "@/lib/data";
 import { nextAssetTag } from "@/lib/asset-tag";
 import { generateQrSvg, qrUrlForTag } from "@/lib/qr";
 import type {
@@ -64,7 +63,7 @@ export async function getEquipment(): Promise<Equipment[]> {
     return rows.map(toUiEquipment);
   } catch (error) {
     logActionError("getEquipment", error);
-    return mockEquipment;
+    return [];
   }
 }
 
