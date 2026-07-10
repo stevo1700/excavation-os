@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateEquipmentRecord } from "@/lib/actions/equipment";
+import { updateEquipmentStatus } from "@/lib/actions/equipment";
 import { isUniqueConstraintError, readJsonObject } from "@/lib/http";
 import { validateEquipmentInput } from "@/lib/validators";
 
@@ -20,7 +20,7 @@ export async function PATCH(
   if (validated.error) return validated.error;
 
   try {
-    const machine = await updateEquipmentRecord(params.id, validated.input);
+    const machine = await updateEquipmentStatus(params.id, validated.input.status);
     if (!machine) {
       return NextResponse.json(
         { error: "Equipment not found" },
