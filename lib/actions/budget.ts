@@ -79,7 +79,7 @@ function round2(n: number): number {
 }
 
 /** Default markup when adding catalog items (30%). */
-export const DEFAULT_MARKUP_PERCENT = 30;
+const DEFAULT_MARKUP_PERCENT = 30;
 
 function priceFromCost(unitCost: number, markupPercent: number): number {
   return round2(unitCost * (1 + markupPercent / 100));
